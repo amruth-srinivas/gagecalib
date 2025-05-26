@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Login - Gage Calibration System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f5f7fa;
+        }
+
+        .login-container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .login-header img {
+            width: 150px;
+            margin-bottom: 1rem;
+        }
+
+        .login-header h1 {
+            color: #2c3e50;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .login-button {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .login-button:hover {
+            background-color: #2980b9;
+        }
+
+        .login-button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            color: #e74c3c;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+            padding: 0.75rem;
+            background-color: #fde8e8;
+            border: 1px solid #fbd5d5;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .server-status {
+            text-align: center;
+            margin-top: 1rem;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+
+        .server-status.connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .server-status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <img src="../assets/images/logo-removebg-preview.png" alt="Logo">
+            <h1>Gage Calibration System</h1>
+            <p>Please login to continue</p>
+        </div>
+        <div id="serverStatus" class="server-status disconnected">
+            Checking server connection...
+        </div>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div class="error-message" id="errorMessage"></div>
+            <button type="submit" class="login-button" id="loginButton">Login</button>
+        </form>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        
+        // Check server connection
+        async function checkServerConnection() {
+            const serverStatus = document.getElementById('serverStatus');
+            const loginButton = document.getElementById('loginButton');
+            
+            try {
+                const response = await fetch('http://127.0.0.1:5005/');
+                if (response.ok) {
+                    serverStatus.textContent = 'Server connected';
+                    serverStatus.className = 'server-status connected';
+                    loginButton.disabled = false;
+                } else {
+                    throw new Error('Server not responding properly');
+                }
+            } catch (error) {
+                serverStatus.textContent = 'Server not connected. Please start the backend server.';
+                serverStatus.className = 'server-status disconnected';
+                loginButton.disabled = true;
+            }
+        }
+
+        // Check server connection on load and every 5 seconds
+        checkServerConnection();
+        setInterval(checkServerConnection, 5000);
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorMessage = document.getElementById('errorMessage');
+            const loginButton = document.getElementById('loginButton');
+
+            // Disable login button while processing
+            loginButton.disabled = true;
+            loginButton.textContent = 'Logging in...';
+
+            try {
+                // Create URL-encoded form data for OAuth2 password flow
+                const formData = new URLSearchParams();
+                formData.append('username', username);
+                formData.append('password', password);
+
+                const response = await fetch('http://127.0.0.1:5005/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Store the token
+                    localStorage.setItem('authToken', data.access_token);
+                    // Redirect to main application
+                    window.location.href = '../index.html';
+                } else {
+                    errorMessage.textContent = data.detail || 'Login failed';
+                    errorMessage.style.display = 'block';
+                    loginButton.disabled = false;
+                    loginButton.textContent = 'Login';
+                }
+            } catch (error) {
+                errorMessage.textContent = 'Connection error. Please check if the server is running.';
+                errorMessage.style.display = 'block';
+                loginButton.disabled = false;
+                loginButton.textContent = 'Login';
+            }
+        });
+    </script>
+</body>
+</html> 

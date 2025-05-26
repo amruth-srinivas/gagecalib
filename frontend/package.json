@@ -1,0 +1,18 @@
+{
+  "name": "gage-calibration-system",
+  "version": "1.0.0",
+  "description": "Desktop application for managing gage calibration",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --debug",
+    "build": "electron-builder"
+  },
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^20.0.0",
+    "electron-builder": "^23.0.0"
+  },
+  "dependencies": {}
+}
