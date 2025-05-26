@@ -445,14 +445,109 @@ function setupInventoryPageLoader() {
      console.log('Inventory page mutation observer setup.');
 }
 
-// Initialize on DOM load
+// Add this after the setupInventoryPageLoader function
+function setupReportsPageLoader() {
+    console.log('Setting up reports page loader');
+    const reportsPage = document.getElementById('reports');
+    if (!reportsPage) {
+        console.error('Reports page element not found');
+        return;
+    }
+    
+    // Setup mutation observer for visibility changes
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && 
+                (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
+                // Check if the page is now visible
+                if (reportsPage.classList.contains('active') || reportsPage.style.display !== 'none') {
+                    console.log('Reports page became active, initializing...');
+                    // Re-initialize the ReportManager
+                    if (typeof window.initializeReportManager === 'function') {
+                        window.initializeReportManager();
+                    }
+                }
+            }
+        });
+    });
+    
+    // Observe changes to 'class' and 'style' attributes
+    observer.observe(reportsPage, { 
+        attributes: true,
+        attributeFilter: ['class', 'style']
+    });
+    console.log('Reports page mutation observer setup.');
+}
+
+// Update the showPage function to include reports page initialization
+function showPage(pageId) {
+    console.log('Showing page:', pageId);
+    
+    // Hide all pages
+    document.querySelectorAll('.page').forEach(page => {
+        page.style.display = 'none';
+        page.classList.remove('active');
+    });
+    
+    // Show the selected page
+    const selectedPage = document.getElementById(pageId);
+    if (selectedPage) {
+        console.log('Found selected page element:', selectedPage.id);
+        selectedPage.style.display = 'block';
+        selectedPage.classList.add('active');
+        
+        // Initialize page-specific logic
+        if (pageId === 'calibrationPlanner') {
+            console.log('Initializing calibration planner page.');
+            if (typeof initializeCalendar === 'function') {
+                initializeCalendar();
+            } else {
+                console.error('initializeCalendar function not found.');
+            }
+        } else if (pageId === 'inventory') {
+            console.log('Initializing inventory page.');
+            loadInventory();
+        } else if (pageId === 'reports') {
+            console.log('Initializing reports page.');
+            if (typeof window.initializeReportManager === 'function') {
+                window.initializeReportManager();
+            } else {
+                console.error('initializeReportManager function not found.');
+            }
+        } else if (pageId === 'issue-log') {
+            console.log('Initializing Issue Log page.');
+            if (typeof setupIssueLogPageLoader === 'function') {
+                setupIssueLogPageLoader();
+            } else {
+                console.error('setupIssueLogPageLoader function not found.');
+            }
+        } else if (pageId === 'tracker') {
+            console.log('Initializing Gage Tracker page.');
+        }
+    } else {
+        console.error('Page element not found:', pageId);
+    }
+    
+    // Update active state in navigation
+    pages.forEach(page => {
+        const link = document.getElementById(page.link);
+        if (link) {
+            if (page.id === pageId) {
+                link.classList.add('active');
+            } else {
+                link.classList.remove('active');
+            }
+        }
+    });
+    console.log('Navigation updated.');
+}
+
+// Update the DOMContentLoaded event listener
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded, setting up inventory functionality');
+    console.log('DOM loaded, setting up page loaders');
     setupInventoryPageLoader();
+    setupReportsPageLoader();
     setupAddGageModal();
-    // Initial call to show the default page (e.g., 'home' or the page with 'active' class)
-    // The logic in index.html handles the initial active class, so showPage might not be needed here on DOMContentLoaded
-    // but is necessary for sidebar navigation clicks.
 });
 
 // Add New Gage Modal Handling
@@ -627,72 +722,6 @@ const pages = [ // Define globally if used by showPage and event listeners
     { id: 'report', link: 'reportLink' },
     { id: 'label', link: 'labelLink' }
 ];
-
-// Update the showPage function to initialize calendar when showing calibration planner
-function showPage(pageId) {
-    console.log('Showing page:', pageId);
-    
-    // Hide all pages by checking all elements with class 'page'
-    document.querySelectorAll('.page').forEach(page => {
-        page.style.display = 'none';
-        page.classList.remove('active'); // Also remove active class
-    });
-    
-    // Show the selected page by ID
-    const selectedPage = document.getElementById(pageId);
-    if (selectedPage) {
-        console.log('Found selected page element:', selectedPage.id);
-        selectedPage.style.display = 'block';
-        selectedPage.classList.add('active'); // Add active class
-        
-        // Initialize page-specific logic
-        if (pageId === 'calibrationPlanner') {
-            console.log('Initializing calibration planner page.');
-             // Check if initializeCalendar function exists and call it
-            if (typeof initializeCalendar === 'function') {
-                 initializeCalendar();
-            } else {
-                 console.error('initializeCalendar function not found.');
-            }
-        } else if (pageId === 'inventory') {
-            console.log('Initializing inventory page.');
-            // Call loadInventory to fetch and render data
-            loadInventory();
-        } else if (pageId === 'issue-log') { // Call setup for issue log page
-             console.log('Initializing Issue Log page (calling setupIssueLogPageLoader).');
-             // Check if setupIssueLogPageLoader function exists and call it
-             if (typeof setupIssueLogPageLoader === 'function') {
-                  setupIssueLogPageLoader();
-             } else {
-                  console.error('setupIssueLogPageLoader function not found.');
-             }
-        } else if (pageId === 'tracker') { // This case will now target the #tracker div
-             console.log('Initializing Gage Tracker page (using gage-tracker.js logic).');
-             // Call the initialization function from gage-tracker.js
-             // Assuming gage-tracker.js exposes a function like setupGageTrackerPage
-             // Let's change the target ID in index.html instead for simplicity
-        }
-
-    } else {
-        console.error('Page element not found:', pageId);
-    }
-    
-    // Update active state in navigation
-    pages.forEach(page => {
-        const link = document.getElementById(page.link);
-        if (link) {
-            if (page.id === pageId) {
-                link.classList.add('active');
-            } else {
-                link.classList.remove('active');
-            }
-        }
-    });
-     console.log('Navigation updated.');
-}
-
-// Make showPage available globally
-window.showPage = showPage;
 
 // Add these functions for edit and delete functionality (Gage Inventory)
 // These functions are called by onclick attributes in renderTable

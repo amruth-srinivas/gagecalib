@@ -5,6 +5,7 @@ from routers import calibration
 from routers import issue_log
 from routers import label
 from routers import calibration_measurements
+from routers import reports
 from database import init_db, init_async_db
 from config import get_settings
 
@@ -32,6 +33,7 @@ app.include_router(calibration.router, prefix="/api", tags=["Calibration Records
 app.include_router(issue_log.router, tags=["Issue Logs"])
 app.include_router(label.router, prefix="/api", tags=["Labels"])
 app.include_router(calibration_measurements.router, prefix="/api", tags=["Calibration Measurements"])
+app.include_router(reports.router, prefix="/api", tags=["Reports"])
 
 # Initialize database on startup
 @app.on_event("startup")
