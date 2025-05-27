@@ -24,6 +24,8 @@ async function checkAuth() {
         if (!response.ok) {
             console.log('Auth check failed, removing token and redirecting to login');
             localStorage.removeItem('authToken');
+            localStorage.removeItem('userRole');
+            localStorage.removeItem('userId');
             showError('Session expired. Please login again.');
             window.location.href = 'pages/login.html';
             return;
@@ -31,6 +33,16 @@ async function checkAuth() {
 
         const user = await response.json();
         console.log('Auth check successful, user:', user);
+        
+        // Validate user data
+        if (!user || !user.id) {
+            console.error('Invalid user data received:', user);
+            throw new Error('Invalid user data received from server');
+        }
+        
+        // Store user info in localStorage
+        localStorage.setItem('userRole', user.role);
+        localStorage.setItem('userId', user.id);
         
         // Update user role in navbar
         const userRoleElement = document.getElementById('userRole');
@@ -40,6 +52,8 @@ async function checkAuth() {
     } catch (error) {
         console.error('Auth check failed:', error);
         localStorage.removeItem('authToken');
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('userId');
         showError('Connection error. Please check if the server is running.');
         window.location.href = 'pages/login.html';
     }
@@ -72,6 +86,7 @@ function showError(message) {
 function logout() {
     console.log('Logging out, removing token');
     localStorage.removeItem('authToken');
+    localStorage.removeItem('userRole');
     showError('Logged out successfully');
     // Small delay before redirect to show the message
     setTimeout(() => {
@@ -147,22 +162,78 @@ function filterAndSortData(data) {
     return filtered;
 }
 
+// Function to check if user is admin
+function isAdmin() {
+    const userRole = localStorage.getItem('userRole');
+    return userRole === 'admin';
+}
+
+// Update renderTable to handle role-based access
+function renderTable(data) {
+    const tbody = document.querySelector('#gageTable tbody');
+    if (!tbody) {
+        console.error('Gage table tbody not found');
+        return;
+    }
+    tbody.innerHTML = '';
+    const filtered = filterAndSortData(data);
+    filtered.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td title="${item.gage_id}">${item.gage_id}</td>
+            <td title="${item.name}">${item.name}</td>
+            <td title="${item.serial_number}">${item.serial_number}</td>
+            <td title="${item.model_number}">${item.model_number}</td>
+            <td title="${item.manufacturer}">${item.manufacturer}</td>
+            <td title="${item.location}">${item.location}</td>
+            <td title="${item.status}">${item.status}</td>
+            <td title="${item.last_calibration_date}">${item.last_calibration_date}</td>
+            <td title="${item.next_calibration_due}">${item.next_calibration_due}</td>
+            <td title="${item.gage_type}">${item.gage_type}</td>
+            <td title="${item.cal_category}">${item.cal_category}</td>
+            <td>
+                <div class="action-buttons">
+                    ${isAdmin() ? `
+                        <button class="action-icon edit-btn" onclick="editGage('${item.gage_id}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="action-icon delete-btn" onclick="deleteGage('${item.gage_id}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    ` : ''}
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+    console.log('Inventory table rendered.');
+}
+
+// Update loadInventory to handle role-based access
 async function loadInventory() {
     console.log('loadInventory called');
     
     // Setup search input listener if not already set
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
-        searchInput.removeEventListener('input', handleSearch); // Remove existing listener if any
+        searchInput.removeEventListener('input', handleSearch);
         searchInput.addEventListener('input', handleSearch);
     }
     
     // Setup filter status listener
     const filterStatusSelect = document.getElementById('filterStatus');
-     if (filterStatusSelect) {
-        filterStatusSelect.removeEventListener('change', handleSearch); // Use change for select
+    if (filterStatusSelect) {
+        filterStatusSelect.removeEventListener('change', handleSearch);
         filterStatusSelect.addEventListener('change', handleSearch);
     }
+
+    // Hide action buttons for non-admin users
+    const actionButtons = document.querySelectorAll('.inventory-actions .action-btn');
+    actionButtons.forEach(button => {
+        if (!isAdmin()) {
+            button.style.display = 'none';
+        }
+    });
 
     // Fetch items regardless of page visibility
     await fetchItems();
@@ -199,67 +270,6 @@ async function fetchItems() {
         }
          showError('Error loading inventory data.');
     }
-}
-
-// Function to handle click events for the entire table
-// This is currently not used as onclick is used in renderTable
-/*
-function handleTableClick(e) {
-    const button = e.target.closest('button');
-    if (!button) return;
-    const id = button.getAttribute('data-id');
-    if (!id) return;
-    const row = button.closest('tr');
-    if (button.classList.contains('edit-btn')) {
-        if (editingRow) return; // Only one row at a time
-        startEditRow(row, id);
-    } else if (button.classList.contains('delete-btn')) {
-        deleteItem(id);
-    } else if (button.classList.contains('save-btn')) {
-        saveEdits(id, row);
-    } else if (button.classList.contains('cancel-btn')) {
-        cancelEdits(row);
-    }
-}
-*/
-
-// Update renderTable to display all gage fields
-function renderTable(data) {
-    const tbody = document.querySelector('#gageTable tbody');
-     if (!tbody) {
-        console.error('Gage table tbody not found');
-        return;
-    }
-    tbody.innerHTML = '';
-    const filtered = filterAndSortData(data);
-    filtered.forEach(item => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td title="${item.gage_id}">${item.gage_id}</td>
-            <td title="${item.name}">${item.name}</td>
-            <td title="${item.serial_number}">${item.serial_number}</td>
-            <td title="${item.model_number}">${item.model_number}</td>
-            <td title="${item.manufacturer}">${item.manufacturer}</td>
-            <td title="${item.location}">${item.location}</td>
-            <td title="${item.status}">${item.status}</td>
-            <td title="${item.last_calibration_date}">${item.last_calibration_date}</td>
-            <td title="${item.next_calibration_due}">${item.next_calibration_due}</td>
-            <td title="${item.gage_type}">${item.gage_type}</td>
-            <td title="${item.cal_category}">${item.cal_category}</td>
-            <td>
-                <div class="action-buttons">
-                    <button class="action-icon edit-btn" onclick="editGage('${item.gage_id}')">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="action-icon delete-btn" onclick="deleteGage('${item.gage_id}')">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-     console.log('Inventory table rendered.');
 }
 
 // Note: The in-line editing functions (startEditRow, saveEdits, cancelEdits) are likely deprecated

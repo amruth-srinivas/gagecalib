@@ -202,8 +202,16 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Store the token
+                    // Validate user data before storing
+                    if (!data.user || !data.user.id) {
+                        throw new Error('Invalid user data received from server');
+                    }
+
+                    // Store the token and user info
                     localStorage.setItem('authToken', data.access_token);
+                    localStorage.setItem('userId', data.user.id);
+                    localStorage.setItem('userRole', data.user.role);
+                    
                     // Redirect to main application
                     window.location.href = '../index.html';
                 } else {

@@ -17,6 +17,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedTemplate = null;
     let selectedLabelSize = '1x1'; // Default size
     let latestCalibration = null;
+    let uploadedLogo = null; // Store uploaded logo as DataURL
+
+    // Get Upload Logo and Print Preview buttons
+    const uploadLogoBtn = document.getElementById('uploadLogoBtn');
+    const printPreviewBtn = document.querySelector('.label-action-bar .action-btn'); // First button is Print Preview
+
+    // Create a hidden file input for logo upload
+    let logoFileInput = document.createElement('input');
+    logoFileInput.type = 'file';
+    logoFileInput.accept = 'image/*';
+    logoFileInput.style.display = 'none';
+    document.body.appendChild(logoFileInput);
 
     // Initial state: only the gage select dropdown is fully visible/interactive.
     // Other sections are hidden or partially visible.
@@ -94,7 +106,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Render the label preview
+    // Add this function after the existing functions but before the event listeners
+    function calculateDynamicFontSize(containerWidth, containerHeight, textLength) {
+        // Base font sizes for different label sizes
+        const baseSizes = {
+            '2x2': { min: 8, max: 24 },
+            '3x2': { min: 10, max: 28 },
+            '1x1': { min: 6, max: 16 },
+            '4x2': { min: 12, max: 32 },
+            '4x6': { min: 14, max: 36 },
+            '2x0.5': { min: 6, max: 14 },
+            '3x1': { min: 8, max: 20 },
+            '2x4': { min: 10, max: 24 },
+            'custom': { min: 8, max: 24 }
+        };
+
+        // Get the base size range for the current label size
+        const sizeRange = baseSizes[selectedLabelSize] || baseSizes['custom'];
+        
+        // Calculate available space (considering padding and margins)
+        const availableWidth = containerWidth * 0.9; // 90% of container width
+        const availableHeight = containerHeight * 0.9; // 90% of container height
+        
+        // Calculate initial font size based on container dimensions
+        let fontSize = Math.min(
+            availableWidth / (textLength * 0.6), // Width-based calculation
+            availableHeight / 2 // Height-based calculation
+        );
+        
+        // Clamp the font size within the allowed range
+        fontSize = Math.max(sizeRange.min, Math.min(sizeRange.max, fontSize));
+        
+        return Math.floor(fontSize);
+    }
+
+    // Update the renderLabelPreview function
     function renderLabelPreview() {
         console.log('Rendering label preview...', { selectedGageId, selectedTemplate, latestCalibration });
         if (!labelPreviewDiv) return;
@@ -106,46 +152,77 @@ document.addEventListener('DOMContentLoaded', () => {
             if (initialSelectionMessage) initialSelectionMessage.style.display = 'none';
             labelPreviewDiv.classList.remove('hidden'); // Show the preview div
 
-            // Display gage and calibration details
-            const gageIdEl = document.createElement('p');
+            // Get container dimensions
+            const containerWidth = labelPreviewDiv.clientWidth;
+            const containerHeight = labelPreviewDiv.clientHeight;
+
+            // Create and style elements with dynamic font sizing
+            const createStyledElement = (text, isTitle = false) => {
+                const element = document.createElement('p');
+                element.textContent = text;
+                const fontSize = calculateDynamicFontSize(
+                    containerWidth,
+                    containerHeight / (isTitle ? 3 : 4),
+                    text.length
+                );
+                element.style.fontSize = `${fontSize}px`;
+                element.style.margin = '2px 0';
+                element.style.textAlign = 'center';
+                element.style.width = '100%';
+                element.style.overflow = 'hidden';
+                element.style.textOverflow = 'ellipsis';
+                element.style.whiteSpace = 'nowrap';
+                return element;
+            };
+
             // Find the gage name from the dropdown options
             const selectedGageOption = selectGageElement ? selectGageElement.options[selectGageElement.selectedIndex] : null;
             const gageName = selectedGageOption && selectedGageOption.textContent ? selectedGageOption.textContent.split(' - ')[1] : '';
 
-            gageIdEl.textContent = `Equipment ID: ${selectedGageId}${gageName ? ' (' + gageName + ')' : ''}`;
-
-            const calDateEl = document.createElement('p');
-            calDateEl.textContent = `Cal: ${latestCalibration.calibration_date}`;
-
-            const dueDateEl = document.createElement('p');
-            dueDateEl.textContent = `Due: ${latestCalibration.next_due_date}`;
+            // Add elements with dynamic sizing
+            const gageIdEl = createStyledElement(`Equipment ID: ${selectedGageId}${gageName ? ' (' + gageName + ')' : ''}`, true);
+            const calDateEl = createStyledElement(`Cal: ${latestCalibration.calibration_date}`);
+            const dueDateEl = createStyledElement(`Due: ${latestCalibration.next_due_date}`);
 
             labelPreviewDiv.appendChild(gageIdEl);
             labelPreviewDiv.appendChild(calDateEl);
             labelPreviewDiv.appendChild(dueDateEl);
 
-            // Placeholder for logo (Gray rectangle 180x40 with Gage ID text)
-            const logoPlaceholder = document.createElement('div');
-            logoPlaceholder.style.cssText = `
-                width: 180px;
-                height: 40px;
-                background-color: #ccc;
-                color: #333;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-top: 10px;
-                font-size: 0.9rem;
-                font-weight: bold;
-            `;
-            logoPlaceholder.textContent = selectedGageId; // Display Gage ID on placeholder
-            labelPreviewDiv.appendChild(logoPlaceholder);
+            // Logo handling with dynamic sizing
+            if (uploadedLogo) {
+                const logoImg = document.createElement('img');
+                logoImg.src = uploadedLogo;
+                logoImg.alt = 'Logo';
+                const logoHeight = containerHeight * 0.2; // Logo takes 20% of container height
+                logoImg.style.cssText = `
+                    width: auto;
+                    height: ${logoHeight}px;
+                    object-fit: contain;
+                    margin-top: 10px;
+                `;
+                labelPreviewDiv.appendChild(logoImg);
+            } else {
+                const logoPlaceholder = document.createElement('div');
+                const fontSize = calculateDynamicFontSize(containerWidth, containerHeight * 0.2, selectedGageId.length);
+                logoPlaceholder.style.cssText = `
+                    width: 90%;
+                    height: ${containerHeight * 0.2}px;
+                    background-color: #ccc;
+                    color: #333;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-top: 10px;
+                    font-size: ${fontSize}px;
+                    font-weight: bold;
+                `;
+                logoPlaceholder.textContent = selectedGageId;
+                labelPreviewDiv.appendChild(logoPlaceholder);
+            }
 
-            // Display status color/result if checkbox is checked
+            // Status display with dynamic sizing
             if (showStatusColorCheckbox && showStatusColorCheckbox.checked && latestCalibration.calibration_result) {
-                const statusEl = document.createElement('p');
-                statusEl.textContent = `Status: ${latestCalibration.calibration_result}`;
-                // Add some basic styling based on result (e.g., Pass/Fail)
+                const statusEl = createStyledElement(`Status: ${latestCalibration.calibration_result}`);
                 if (latestCalibration.calibration_result.toLowerCase() === 'pass') {
                     statusEl.style.color = 'green';
                 } else if (latestCalibration.calibration_result.toLowerCase() === 'fail') {
@@ -159,14 +236,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const noCalMessage = document.createElement('p');
             noCalMessage.textContent = 'No calibration data found for this gage.';
             noCalMessage.style.color = 'orange';
-            labelPreviewDiv.innerHTML = ''; // Clear any previous content
+            const fontSize = calculateDynamicFontSize(
+                labelPreviewDiv.clientWidth,
+                labelPreviewDiv.clientHeight,
+                noCalMessage.textContent.length
+            );
+            noCalMessage.style.fontSize = `${fontSize}px`;
+            labelPreviewDiv.innerHTML = '';
             labelPreviewDiv.appendChild(noCalMessage);
-            labelPreviewDiv.style.border = '1px dashed #ccc'; // Show border even without full content
-            labelPreviewDiv.classList.remove('hidden'); // Show the preview div
+            labelPreviewDiv.style.border = '1px dashed #ccc';
+            labelPreviewDiv.classList.remove('hidden');
             if (initialSelectionMessage) initialSelectionMessage.style.display = 'none';
-
         } else {
-            // If gage or template not selected, hide preview and show initial message
             labelPreviewDiv.classList.add('hidden');
             labelPreviewDiv.style.border = 'none';
             if (initialSelectionMessage) initialSelectionMessage.style.display = 'block';
@@ -182,6 +263,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 '2x2': { width: '200px', height: '200px' },
                 '3x2': { width: '300px', height: '200px' },
                 '1x1': { width: '100px', height: '100px' },
+                '4x2': { width: '400px', height: '200px' },
+                '4x6': { width: '400px', height: '600px' },
+                '2x0.5': { width: '200px', height: '50px' },
+                '3x1': { width: '300px', height: '100px' },
+                '2x4': { width: '200px', height: '400px' },
+                'custom': { width: '250px', height: '150px' },
             };
             const size = sizes[selectedLabelSize] || sizes['1x1']; // Default to 1x1 if size not found
             labelPreviewDiv.style.width = size.width;
@@ -243,6 +330,175 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectedGageId && selectedTemplate) {
                 renderLabelPreview(); // Re-render to show/hide status
             }
+        });
+    }
+
+    // Logo upload logic
+    if (uploadLogoBtn) {
+        uploadLogoBtn.addEventListener('click', () => {
+            logoFileInput.click();
+        });
+    }
+    logoFileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                uploadedLogo = e.target.result;
+                renderLabelPreview();
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Add these functions before the event listeners
+    async function convertLabelToImage(format = 'png') {
+        if (!labelPreviewDiv || labelPreviewDiv.classList.contains('hidden')) {
+            alert('Please select a gage and template to generate the label image.');
+            return null;
+        }
+
+        try {
+            // Create a clone of the preview div to avoid modifying the original
+            const clone = labelPreviewDiv.cloneNode(true);
+            clone.style.position = 'absolute';
+            clone.style.left = '-9999px';
+            clone.style.top = '-9999px';
+            document.body.appendChild(clone);
+
+            // Use html2canvas to convert the div to an image
+            const canvas = await html2canvas(clone, {
+                scale: 2, // Higher quality
+                backgroundColor: '#ffffff',
+                logging: false,
+                useCORS: true // Enable CORS for images
+            });
+
+            // Remove the clone
+            document.body.removeChild(clone);
+
+            // Convert canvas to image
+            const imageData = canvas.toDataURL(`image/${format}`, 1.0);
+            return imageData;
+        } catch (error) {
+            console.error('Error converting label to image:', error);
+            alert('Failed to generate label image. Please try again.');
+            return null;
+        }
+    }
+
+    function downloadLabelImage(imageData, format) {
+        if (!imageData) return;
+
+        // Create a temporary link element
+        const link = document.createElement('a');
+        link.download = `label_${selectedGageId}_${new Date().toISOString().slice(0,10)}.${format}`;
+        link.href = imageData;
+        link.click();
+    }
+
+    // Update the print preview button click handler
+    if (printPreviewBtn) {
+        printPreviewBtn.addEventListener('click', async () => {
+            if (!labelPreviewDiv || labelPreviewDiv.classList.contains('hidden')) {
+                alert('Please select a gage and template to preview the label.');
+                return;
+            }
+
+            // Create a modal for preview and export options
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.style.display = 'flex';
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100%';
+            modal.style.height = '100%';
+            modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+            modal.style.zIndex = '1000';
+
+            const modalContent = document.createElement('div');
+            modalContent.className = 'modal-content';
+            modalContent.style.backgroundColor = 'white';
+            modalContent.style.padding = '20px';
+            modalContent.style.borderRadius = '8px';
+            modalContent.style.maxWidth = '90%';
+            modalContent.style.maxHeight = '90%';
+            modalContent.style.overflow = 'auto';
+
+            // Clone the label preview
+            const previewClone = labelPreviewDiv.cloneNode(true);
+            previewClone.style.margin = '0 auto';
+            previewClone.style.backgroundColor = 'white';
+            previewClone.style.padding = '20px';
+
+            // Add export buttons
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.marginTop = '20px';
+            buttonContainer.style.textAlign = 'center';
+            buttonContainer.style.display = 'flex';
+            buttonContainer.style.justifyContent = 'center';
+            buttonContainer.style.gap = '10px';
+
+            const exportPNG = document.createElement('button');
+            exportPNG.textContent = 'Export as PNG';
+            exportPNG.className = 'action-btn';
+            exportPNG.onclick = async () => {
+                const imageData = await convertLabelToImage('png');
+                downloadLabelImage(imageData, 'png');
+            };
+
+            const exportJPG = document.createElement('button');
+            exportJPG.textContent = 'Export as JPG';
+            exportJPG.className = 'action-btn';
+            exportJPG.onclick = async () => {
+                const imageData = await convertLabelToImage('jpeg');
+                downloadLabelImage(imageData, 'jpg');
+            };
+
+            const printButton = document.createElement('button');
+            printButton.textContent = 'Print';
+            printButton.className = 'action-btn';
+            printButton.onclick = () => {
+                const printWindow = window.open('', '_blank');
+                if (printWindow) {
+                    printWindow.document.write('<html><head><title>Label Print Preview</title>');
+                    printWindow.document.write('<style>body{margin:0;display:flex;align-items:center;justify-content:center;height:100vh;} #labelPreview{border:1px dashed #ccc;}</style>');
+                    printWindow.document.write('</head><body>');
+                    printWindow.document.body.appendChild(previewClone);
+                    printWindow.document.write('</body></html>');
+                    printWindow.document.close();
+                    setTimeout(() => {
+                        printWindow.print();
+                    }, 300);
+                }
+            };
+
+            const closeButton = document.createElement('button');
+            closeButton.textContent = 'Close';
+            closeButton.className = 'action-btn';
+            closeButton.onclick = () => {
+                document.body.removeChild(modal);
+            };
+
+            buttonContainer.appendChild(exportPNG);
+            buttonContainer.appendChild(exportJPG);
+            buttonContainer.appendChild(printButton);
+            buttonContainer.appendChild(closeButton);
+
+            modalContent.appendChild(previewClone);
+            modalContent.appendChild(buttonContainer);
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+
+            // Close modal when clicking outside
+            modal.onclick = (event) => {
+                if (event.target === modal) {
+                    document.body.removeChild(modal);
+                }
+            };
         });
     }
 

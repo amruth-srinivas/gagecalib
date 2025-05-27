@@ -13,59 +13,167 @@ function setupIssueLogPageLoader() {
     console.log('Issue Log page element found.');
     // Initial load of data
     loadIssueLogs();
-     console.log('Initial loadIssueLogs called from setupIssueLogPageLoader.');
-
-    // Removing MutationObserver as showPage will call this directly
-    /*
-    // Initial load if page is active
-    if (issueLogPage.classList.contains('active') || issueLogPage.style.display === 'block') {
-        console.log('Issue Log page is initially active, loading data...');
-        loadIssueLogs();
-    }
-
-    // Setup mutation observer for visibility changes
-    const observer = new MutationObserver((mutations) => {
-        console.log('MutationObserver triggered.');
-        mutations.forEach((mutation) => {
-            if (mutation.type === 'attributes' &&
-                (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
-                if (issueLogPage.classList.contains('active') || issueLogPage.style.display !== 'none') {
-                    console.log('Issue Log page became active, loading data...');
-                    loadIssueLogs();
-                }
-            }
-        });
-    });
-
-    observer.observe(issueLogPage, {
-        attributes: true,
-        attributeFilter: ['class', 'style']
-    });
-     console.log('MutationObserver for #issue-log setup.');
-    */
+    console.log('Initial loadIssueLogs called from setupIssueLogPageLoader.');
 }
 
 // Load issue logs from API
 async function loadIssueLogs() {
     console.log('--- Inside loadIssueLogs function ---');
     try {
-        console.log('Fetching issue logs from:', 'http://127.0.0.1:5005/api/issue-log');
-        const response = await fetch('http://127.0.0.1:5005/api/issue-log');
+        // Get current user role and ID
+        const userRoleElement = document.getElementById('userRole');
+        const userRole = userRoleElement ? userRoleElement.textContent : 'user';
+        const userId = parseInt(localStorage.getItem('userId'));
+        
+        console.log('Current user role:', userRole, 'User ID:', userId);
 
-        console.log('Fetch issue logs response status:', response.status);
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Failed to fetch issue logs:', response.status, response.statusText, errorText);
-            throw new Error(`Failed to fetch issue logs: ${response.status} ${response.statusText}`);
+        if (userRole === 'admin') {
+            // For admin, fetch all logs
+            console.log('Fetching all issue logs for admin');
+            const response = await fetch('http://127.0.0.1:5005/api/issue-log');
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Failed to fetch issue logs:', response.status, response.statusText, errorText);
+                throw new Error(`Failed to fetch issue logs: ${response.status} ${response.statusText}`);
+            }
+
+            allIssueLogs = await response.json();
+            
+            // Create and show admin table
+            const adminTableContainer = document.createElement('div');
+            adminTableContainer.id = 'admin-issue-log-table';
+            adminTableContainer.innerHTML = `
+                <div class="table-section">
+                    <h3>All Gage Issue Logs</h3>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Issue ID</th>
+                                <th>Gage ID</th>
+                                <th>Issue Date</th>
+                                <th>Issued From</th>
+                                <th>Issued To</th>
+                                <th>Handled By</th>
+                                <th>Return Date</th>
+                                <th>Returned By</th>
+                                <th>Condition on Return</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${allIssueLogs.map(log => `
+                                <tr>
+                                    <td>${log.issue_id}</td>
+                                    <td>${log.gage_id}</td>
+                                    <td>${log.issue_date ? new Date(log.issue_date).toLocaleDateString() : '-'}</td>
+                                    <td>${log.issued_from || '-'}</td>
+                                    <td>${log.issued_to || '-'}</td>
+                                    <td>${log.handled_by || '-'}</td>
+                                    <td>${log.return_date ? new Date(log.return_date).toLocaleDateString() : '-'}</td>
+                                    <td>${log.returned_by || '-'}</td>
+                                    <td>${log.condition_on_return || '-'}</td>
+                                    <td>
+                                        <div class="action-buttons">
+                                            ${!log.return_date ? `
+                                                <button class="action-icon return-btn" onclick="returnGage('${log.issue_id}')">
+                                                    <i class="fas fa-undo"></i>
+                                                </button>
+                                            ` : ''}
+                                            <button class="action-icon edit-btn" onclick="editIssueLog('${log.issue_id}')">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="action-icon delete-btn" onclick="deleteIssueLog('${log.issue_id}')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            // Replace existing tables with admin table
+            const issueLogPage = document.getElementById('issue-log');
+            if (issueLogPage) {
+                const existingTables = issueLogPage.querySelectorAll('.table-section');
+                existingTables.forEach(table => table.remove());
+                issueLogPage.appendChild(adminTableContainer);
+            }
+
+            // Update summary to show total counts
+            const totalGagesEl = document.getElementById('total-gages-count');
+            const issuedOutEl = document.getElementById('issued-out-count');
+            const returnedEl = document.getElementById('returned-count');
+
+            if (totalGagesEl) totalGagesEl.textContent = allIssueLogs.length;
+            if (issuedOutEl) issuedOutEl.textContent = allIssueLogs.filter(log => !log.return_date).length;
+            if (returnedEl) returnedEl.textContent = allIssueLogs.filter(log => log.return_date).length;
+
+        } else {
+            // For regular users, validate user ID
+            if (!userId || userId <= 0) {
+                console.error('Invalid or missing user ID');
+                showError('Please log in to view your gages');
+                return;
+            }
+
+            // For regular users, fetch their specific logs
+            console.log('Fetching user-specific logs for user ID:', userId);
+            const response = await fetch(`http://127.0.0.1:5005/api/issue-log/user/${userId}`);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Failed to fetch user gages:', response.status, response.statusText, errorText);
+                throw new Error(`Failed to fetch user gages: ${response.status} ${response.statusText}`);
+            }
+
+            const userGages = await response.json();
+            console.log('User gages data:', userGages);
+
+            // Show user tables
+            const handledTable = document.querySelector('#user-handled-table');
+            const returnedTable = document.querySelector('#user-returned-table');
+            
+            if (handledTable) handledTable.style.display = 'table';
+            if (returnedTable) returnedTable.style.display = 'table';
+            
+            // Update table headers for user view
+            const handledTableHeader = document.querySelector('#user-handled-table thead tr');
+            const returnedTableHeader = document.querySelector('#user-returned-table thead tr');
+            
+            if (handledTableHeader) {
+                handledTableHeader.innerHTML = `
+                    <th>Issue ID</th>
+                    <th>Gage ID</th>
+                    <th>Issue Date</th>
+                    <th>Issued From</th>
+                    <th>Issued To</th>
+                    <th>Actions</th>
+                `;
+            }
+            
+            if (returnedTableHeader) {
+                returnedTableHeader.innerHTML = `
+                    <th>Issue ID</th>
+                    <th>Gage ID</th>
+                    <th>Issue Date</th>
+                    <th>Issued From</th>
+                    <th>Issued To</th>
+                    <th>Return Date</th>
+                    <th>Condition on Return</th>
+                `;
+            }
+
+            // Update summaries
+            updateIssueLogSummary(userGages.handled_gages, userGages.returned_gages);
+            
+            // Render both tables
+            renderUserHandledTable(userGages.handled_gages, userRole);
+            renderUserReturnedTable(userGages.returned_gages, userRole);
         }
-
-        allIssueLogs = await response.json();
-        console.log('Successfully fetched and parsed issue logs:', allIssueLogs);
-
-        updateIssueLogSummary(allIssueLogs);
-        console.log('Updated issue log summary.');
-        renderIssueLogTable(allIssueLogs);
-        console.log('Rendered issue log table.');
 
     } catch (err) {
         console.error('Error in loadIssueLogs:', err);
@@ -74,73 +182,109 @@ async function loadIssueLogs() {
 }
 
 // Update summary cards
-function updateIssueLogSummary(logs) {
+function updateIssueLogSummary(handledLogs, returnedLogs) {
     console.log('--- Inside updateIssueLogSummary function ---');
     const totalGagesEl = document.getElementById('total-gages-count');
     const issuedOutEl = document.getElementById('issued-out-count');
     const returnedEl = document.getElementById('returned-count');
 
-    if (totalGagesEl) totalGagesEl.textContent = logs.length;
-    if (issuedOutEl) issuedOutEl.textContent = logs.filter(log => !log.return_date).length;
-    if (returnedEl) returnedEl.textContent = logs.filter(log => log.return_date).length;
+    if (totalGagesEl) totalGagesEl.textContent = handledLogs.length + returnedLogs.length;
+    if (issuedOutEl) issuedOutEl.textContent = handledLogs.length;
+    if (returnedEl) returnedEl.textContent = returnedLogs.length;
     console.log('Issue log summary updated.');
 }
 
-// Render issue log table
-function renderIssueLogTable(logs) {
-    console.log('--- Inside renderIssueLogTable function ---', logs);
-    const tbody = document.querySelector('#issue-log-table tbody');
+// Render table for gages currently handled by user
+function renderUserHandledTable(logs, userRole) {
+    console.log('--- Inside renderUserHandledTable function ---', logs);
+    const tbody = document.querySelector('#user-handled-table tbody');
     if (!tbody) {
-        console.error('Issue log table tbody not found.');
+        console.error('User handled table tbody not found.');
         return;
     }
     tbody.innerHTML = '';
 
     if (!logs || logs.length === 0) {
-        console.log('No issue logs to render.');
-        tbody.innerHTML = '<tr><td colspan="10">No issue logs found.</td></tr>';
+        console.log('No handled logs to render.');
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">No gages currently in possession.</td></tr>';
         return;
     }
 
+    // Sort logs by issue_date in descending order (most recent first)
+    logs.sort((a, b) => new Date(b.issue_date) - new Date(a.issue_date));
+
     logs.forEach(log => {
         const tr = document.createElement('tr');
-
-        // Determine status based on return_date
-        let status = !log.return_date ? 'Issued' : 'Returned';
-        // Further refine status based on expected_return if not returned
-         if (status === 'Issued' && log.expected_return && new Date(log.expected_return) < new Date()) {
-             status = 'Overdue';
-         }
-
         tr.innerHTML = `
             <td>${log.issue_id}</td>
             <td>${log.gage_id}</td>
             <td>${log.issue_date ? new Date(log.issue_date).toLocaleDateString() : '-'}</td>
             <td>${log.issued_from || '-'}</td>
             <td>${log.issued_to || '-'}</td>
-            <td>${log.handled_by || '-'}</td>
-            <td>${log.return_date ? new Date(log.return_date).toLocaleDateString() : '-'}</td>
-            <td>${log.returned_by || '-'}</td>
-            <td>${log.condition_on_return || '-'}</td>
+            <td>${log.expected_return_date ? new Date(log.expected_return_date).toLocaleDateString() : '-'}</td>
             <td>
                 <div class="action-buttons">
-                    <button class="action-icon edit-btn" onclick="editIssueLog('${log.issue_id}')">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    ${!log.return_date ? `
-                        <button class="action-icon return-btn" onclick="returnGage('${log.issue_id}')">
-                            <i class="fas fa-undo"></i>
-                        </button>
-                    ` : ''}
-                    <button class="action-icon delete-btn" onclick="deleteIssueLog('${log.issue_id}')">
-                        <i class="fas fa-trash"></i>
+                    <button class="action-icon return-btn" onclick="returnGage('${log.issue_id}')" title="Return Gage">
+                        <i class="fas fa-undo"></i>
                     </button>
                 </div>
             </td>
         `;
         tbody.appendChild(tr);
     });
-     console.log(`${logs.length} issue log rows rendered.`);
+    console.log(`${logs.length} handled gage rows rendered.`);
+}
+
+// Render table for gages returned by user
+function renderUserReturnedTable(logs, userRole) {
+    console.log('--- Inside renderUserReturnedTable function ---', logs);
+    const tbody = document.querySelector('#user-returned-table tbody');
+    if (!tbody) {
+        console.error('User returned table tbody not found.');
+        return;
+    }
+    tbody.innerHTML = '';
+
+    if (!logs || logs.length === 0) {
+        console.log('No returned logs to render.');
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">No gage return history found.</td></tr>';
+        return;
+    }
+
+    // Sort logs by return_date in descending order (most recent first)
+    logs.sort((a, b) => new Date(b.return_date) - new Date(a.return_date));
+
+    logs.forEach(log => {
+        const tr = document.createElement('tr');
+        const conditionClass = getConditionClass(log.condition_on_return);
+        tr.innerHTML = `
+            <td>${log.issue_id}</td>
+            <td>${log.gage_id}</td>
+            <td>${log.issue_date ? new Date(log.issue_date).toLocaleDateString() : '-'}</td>
+            <td>${log.issued_from || '-'}</td>
+            <td>${log.issued_to || '-'}</td>
+            <td>${log.return_date ? new Date(log.return_date).toLocaleDateString() : '-'}</td>
+            <td><span class="status-badge ${conditionClass}">${log.condition_on_return || '-'}</span></td>
+        `;
+        tbody.appendChild(tr);
+    });
+    console.log(`${logs.length} returned gage rows rendered.`);
+}
+
+// Helper function to get condition class for styling
+function getConditionClass(condition) {
+    switch(condition?.toLowerCase()) {
+        case 'good':
+            return 'status-good';
+        case 'fair':
+            return 'status-fair';
+        case 'poor':
+            return 'status-poor';
+        case 'damaged':
+            return 'status-damaged';
+        default:
+            return '';
+    }
 }
 
 // Add new issue log
@@ -264,14 +408,20 @@ async function updateIssueLog(formData) {
 
 // Return gage
 async function returnGage(issueId) {
-     console.log('--- Inside returnGage function ---', issueId);
+    console.log('--- Inside returnGage function ---', issueId);
     if (!confirm('Are you sure you want to mark this gage as returned?')) {
         console.log('Return cancelled.');
         return;
     }
 
     try {
-        // You'll need to fetch the existing issue log data first
+        // Get current user ID
+        const currentUserId = localStorage.getItem('userId');
+        if (!currentUserId) {
+            throw new Error('No user ID found');
+        }
+
+        // Fetch the existing issue log data
         const response = await fetch(`http://127.0.0.1:5005/api/issue-log/${issueId}`);
         if (!response.ok) {
             const errorText = await response.text();
@@ -281,13 +431,12 @@ async function returnGage(issueId) {
         const issueLog = await response.json();
         console.log('Fetched issue log for return:', issueLog);
 
-        // Now update the return_date, returned_by (assuming a default or logged-in user), and condition
-        // For simplicity, let's just set return_date to now. In a real app, you'd get returned_by and condition from a form/modal.
+        // Update with return information
         const updateData = {
-            ...issueLog, // Keep existing data
-            return_date: new Date().toISOString(), // Set current date/time
-            returned_by: issueLog.handled_by, // Example: set returned_by to handled_by
-            condition_on_return: "Good" // Example: set a default condition
+            ...issueLog,
+            return_date: new Date().toISOString(),
+            returned_by: parseInt(currentUserId),
+            condition_on_return: "Good" // You might want to add a form to get this from the user
         };
 
         const updateResponse = await fetch(`http://127.0.0.1:5005/api/issue-log/${issueId}`, {
@@ -298,16 +447,15 @@ async function returnGage(issueId) {
             body: JSON.stringify(updateData)
         });
 
-        console.log('Return gage update response status:', updateResponse.status);
         if (!updateResponse.ok) {
-             const errorText = await updateResponse.text();
-             console.error('Failed to update issue log for return:', updateResponse.status, updateResponse.statusText, errorText);
+            const errorText = await updateResponse.text();
+            console.error('Failed to update issue log for return:', updateResponse.status, updateResponse.statusText, errorText);
             throw new Error('Failed to update issue log for return');
         }
 
         showNotification('Gage marked as returned successfully');
-        await loadIssueLogs(); // Refresh the table
-         console.log('Gage returned and table refreshed.');
+        await loadIssueLogs(); // Refresh both tables
+        console.log('Gage returned and tables refreshed.');
 
     } catch (err) {
         console.error('Error returning gage:', err);

@@ -1326,52 +1326,84 @@
     }
 
     #issue-log .issue-log-table-wrapper, #inventory .inventory-table-wrapper {
-         background: white;
+        background: white;
         border-radius: 8px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.07);
         padding: 1rem;
         margin-top: 1rem;
+        max-height: 600px;
+        overflow-y: auto;
     }
 
     #issue-log .issue-log-table, #inventory .data-table {
-      width: 100%;
-      border-collapse: collapse;
-      background-color: #fff;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      font-size: 0.85rem;
+        width: 100%;
+        border-collapse: collapse;
+        background-color: #fff;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        font-size: 0.85rem;
+    }
+
+    #issue-log .issue-log-table thead, #inventory .data-table thead {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background-color: #f1f1f1;
     }
 
     #issue-log .issue-log-table th, #inventory .data-table th {
-      background-color: #f1f1f1;
-      text-align: left;
-      padding: 10px 12px;
-      font-weight: 600;
-      font-size: 0.85rem;
+        background-color: #f1f1f1;
+        text-align: left;
+        padding: 12px 15px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        border-bottom: 2px solid #e0e0e0;
+        white-space: nowrap;
     }
 
     #issue-log .issue-log-table td, #inventory .data-table td {
-      padding: 8px 12px;
-      border-top: 1px solid #e0e0e0;
-      font-size: 0.85rem;
+        padding: 10px 15px;
+        border-top: 1px solid #e0e0e0;
+        font-size: 0.85rem;
+        white-space: nowrap;
     }
 
     #issue-log .issue-log-table tr:hover, #inventory .data-table tr:hover {
-      background-color: #f9f9f9;
+        background-color: #f9f9f9;
     }
 
     /* Specific column width adjustments for readability */
-    #issue-log .issue-log-table th:nth-child(1), #issue-log .issue-log-table td:nth-child(1) { width: 5%; }
-    #issue-log .issue-log-table th:nth-child(2), #issue-log .issue-log-table td:nth-child(2) { width: 5%; }
-    #issue-log .issue-log-table th:nth-child(3), #issue-log .issue-log-table td:nth-child(3) { width: 10%; }
-    #issue-log .issue-log-table th:nth-child(4), #issue-log .issue-log-table td:nth-child(4) { width: 10%; }
-    #issue-log .issue-log-table th:nth-child(5), #issue-log .issue-log-table td:nth-child(5) { width: 10%; }
-    #issue-log .issue-log-table th:nth-child(6), #issue-log .issue-log-table td:nth-child(6) { width: 8%; }
-    #issue-log .issue-log-table th:nth-child(7), #issue-log .issue-log-table td:nth-child(7) { width: 10%; }
-    #issue-log .issue-log-table th:nth-child(8), #issue-log .issue-log-table td:nth-child(8) { width: 8%; }
-    #issue-log .issue-log-table th:nth-child(9), #issue-log .issue-log-table td:nth-child(9) { width: 15%; }
-    #issue-log .issue-log-table th:nth-child(10), #issue-log .issue-log-table td:nth-child(10) { width: 9%; }
+    #issue-log .issue-log-table th:nth-child(1), #issue-log .issue-log-table td:nth-child(1) { width: 80px; }
+    #issue-log .issue-log-table th:nth-child(2), #issue-log .issue-log-table td:nth-child(2) { width: 80px; }
+    #issue-log .issue-log-table th:nth-child(3), #issue-log .issue-log-table td:nth-child(3) { width: 120px; }
+    #issue-log .issue-log-table th:nth-child(4), #issue-log .issue-log-table td:nth-child(4) { width: 150px; }
+    #issue-log .issue-log-table th:nth-child(5), #issue-log .issue-log-table td:nth-child(5) { width: 150px; }
+    #issue-log .issue-log-table th:nth-child(6), #issue-log .issue-log-table td:nth-child(6) { width: 100px; }
+    #issue-log .issue-log-table th:nth-child(7), #issue-log .issue-log-table td:nth-child(7) { width: 120px; }
+    #issue-log .issue-log-table th:nth-child(8), #issue-log .issue-log-table td:nth-child(8) { width: 100px; }
+    #issue-log .issue-log-table th:nth-child(9), #issue-log .issue-log-table td:nth-child(9) { width: 200px; }
+    #issue-log .issue-log-table th:nth-child(10), #issue-log .issue-log-table td:nth-child(10) { width: 120px; }
+
+    /* Custom scrollbar styling */
+    #issue-log .issue-log-table-wrapper::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    #issue-log .issue-log-table-wrapper::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    #issue-log .issue-log-table-wrapper::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+
+    #issue-log .issue-log-table-wrapper::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
 
      /* Style for status badges in issue log table (reusing status-badge styles) */
     #issue-log .issue-log-table .status-badge.issued, #inventory .data-table .status-badge.issued { background: #3498db30; color: #3498db; }
@@ -1945,6 +1977,107 @@
     }
   </style>
 
+  <style>
+    /* ... existing styles ... */
+
+    /* Table Section Styles */
+    .table-section {
+        margin-bottom: 2rem;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        padding: 1.5rem;
+    }
+
+    .table-section h3 {
+        color: #2c3e50;
+        margin-bottom: 1rem;
+        font-size: 1.2rem;
+        font-weight: 500;
+    }
+
+    .table-container {
+        overflow-x: auto;
+        margin-top: 1rem;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 0.5rem;
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .data-table th {
+        background-color: #f8f9fa;
+        font-weight: 500;
+        color: #2c3e50;
+    }
+
+    .data-table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .action-icon {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0.25rem;
+        color: #3498db;
+        transition: color 0.3s;
+    }
+
+    .action-icon:hover {
+        color: #2980b9;
+    }
+
+    .action-icon.return-btn {
+        color: #27ae60;
+    }
+
+    .action-icon.return-btn:hover {
+        color: #219a52;
+    }
+
+    /* Summary Cards */
+    .inventory-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .summary-card {
+        background-color: #fff;
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .summary-title {
+        color: #7f8c8d;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .summary-value {
+        color: #2c3e50;
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+  </style>
+
 </head>
 <body>
   <div class="app-flex-row">
@@ -2346,7 +2479,12 @@
                   <option value="2x2">2" x 2"</option>
                   <option value="3x2">3" x 2"</option>
                   <option value="1x1">1" x 1"</option>
-                  <!-- Add more sizes as needed -->
+                  <option value="4x2">4" x 2"</option>
+                  <option value="4x6">4" x 6"</option>
+                  <option value="2x0.5">2" x 0.5"</option>
+                  <option value="3x1">3" x 1"</option>
+                  <option value="2x4">2" x 4"</option>
+                  <option value="custom">Custom (250x150px)</option>
                 </select>
               </div>
               <div class="form-group">
@@ -2383,49 +2521,71 @@
           <div class="label-action-bar">
             <button class="action-btn">Print Preview</button>
             <button class="action-btn" id="uploadLogoBtn">Upload Logo</button>
+            <input type="file" id="labelLogoInput" accept="image/*" style="display:none;" />
             <button class="action-btn btn-primary">Save Template</button>
           </div>
         </div>
         <!-- Issue Log Page -->
         <div id="issue-log" class="page">
-            <h2>Issue Log</h2>
-            <div class="issue-log-summary-cards">
-                <div class="issue-log-summary-card">
-                    <h4>Total Gages</h4>
-                    <p id="total-gages-count">0</p>
+            <div class="inventory-summary">
+                <div class="summary-card">
+                    <div class="summary-title">Total Gages</div>
+                    <div class="summary-value" id="total-gages-count">0</div>
                 </div>
-                <div class="issue-log-summary-card">
-                    <h4>Issued Out</h4>
-                    <p id="issued-out-count">0</p>
+                <div class="summary-card">
+                    <div class="summary-title">Currently in Possession</div>
+                    <div class="summary-value" id="issued-out-count">0</div>
                 </div>
-                <div class="issue-log-summary-card">
-                    <h4>Returned</h4>
-                    <p id="returned-count">0</p>
+                <div class="summary-card">
+                    <div class="summary-title">Returned Gages</div>
+                    <div class="summary-value" id="returned-count">0</div>
                 </div>
             </div>
-            <div class="issue-log-actions" style="margin-bottom: 15px;">
-              <button class="action-btn" id="addIssueLogBtn">Add New Issue Log</button>
+
+            <!-- Currently Handled Gages Table -->
+            <div class="table-section">
+                <h3>Gages Currently in Your Possession</h3>
+                <div class="table-container">
+                    <table class="data-table" id="user-handled-table">
+                        <thead>
+                            <tr>
+                                <th>Issue ID</th>
+                                <th>Gage ID</th>
+                                <th>Issue Date</th>
+                                <th>Issued From</th>
+                                <th>Issued To</th>
+                                <th>Expected Return</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Rows will be populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div style="height: 400px; overflow-y: auto; border: 1px solid #ccc; border-radius: 4px;">
-            <table class="issue-log-table" id="issue-log-table">
-                <thead>
-                    <tr>
-                        <th>Issue ID</th>
-                        <th>Gage ID</th>
-                        <th>Issue Date</th>
-                        <th>Issued From</th>
-                        <th>Issued To</th>
-                        <th>Handled By</th>
-                        <th>Return Date</th>
-                        <th>Returned By</th>
-                        <th>Condition on Return</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- Issue log rows will be inserted here by renderer.js -->
-                </tbody>
-            </table>
+
+            <!-- Returned Gages History Table -->
+            <div class="table-section">
+                <h3>Your Gage Return History</h3>
+                <div class="table-container">
+                    <table class="data-table" id="user-returned-table">
+                        <thead>
+                            <tr>
+                                <th>Issue ID</th>
+                                <th>Gage ID</th>
+                                <th>Issue Date</th>
+                                <th>Issued From</th>
+                                <th>Issued To</th>
+                                <th>Return Date</th>
+                                <th>Condition on Return</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Rows will be populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
       </div>

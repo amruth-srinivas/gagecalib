@@ -4,8 +4,9 @@ from sqlalchemy.future import select
 from typing import List
 from models import IssueLog, Gage
 from schemas import IssueLogCreate, IssueLogResponse, IssueLogUpdate
-from database import get_async_db
+from database import get_async_db, get_db
 from datetime import datetime
+from sqlalchemy.orm import Session
 
 router = APIRouter(
     prefix="/api/issue-log",
@@ -75,4 +76,46 @@ async def delete_issue_log(issue_id: int, db: AsyncSession = Depends(get_async_d
     
     await db.delete(db_issue_log)
     await db.commit()
-    return {"status": "success", "message": f"Issue log {issue_id} deleted"} 
+    return {"status": "success", "message": f"Issue log {issue_id} deleted"}
+
+@router.get("/user/{user_id}", response_model=dict)
+def get_user_gages(user_id: int, db: Session = Depends(get_db)):
+    """
+    Get all gages handled and returned by a specific user
+    """
+    try:
+        # Get gages currently handled by the user
+        handled_gages = db.query(IssueLog).filter(
+            IssueLog.handled_by == user_id,
+            IssueLog.return_date == None
+        ).all()
+
+        # Get gages returned by the user
+        returned_gages = db.query(IssueLog).filter(
+            IssueLog.returned_by == user_id
+        ).all()
+
+        return {
+            "handled_gages": [
+                {
+                    "issue_id": log.issue_id,
+                    "gage_id": log.gage_id,
+                    "issue_date": log.issue_date,
+                    "issued_from": log.issued_from,
+                    "issued_to": log.issued_to
+                } for log in handled_gages
+            ],
+            "returned_gages": [
+                {
+                    "issue_id": log.issue_id,
+                    "gage_id": log.gage_id,
+                    "issue_date": log.issue_date,
+                    "issued_from": log.issued_from,
+                    "issued_to": log.issued_to,
+                    "return_date": log.return_date,
+                    "condition_on_return": log.condition_on_return
+                } for log in returned_gages
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) 
