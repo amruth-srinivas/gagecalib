@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('Label Manager script loaded.');
 
     const selectGageElement = document.getElementById('selectGage');
@@ -14,14 +14,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const labelActionBar = document.querySelector('.label-action-bar');
 
     let selectedGageId = null;
-    let selectedTemplate = null;
+    let selectedTemplate = 'standard'; // Default template
     let selectedLabelSize = '1x1'; // Default size
     let latestCalibration = null;
     let uploadedLogo = null; // Store uploaded logo as DataURL
+    let currentUserRole = 'user'; // Default to user role
 
     // Get Upload Logo and Print Preview buttons
     const uploadLogoBtn = document.getElementById('uploadLogoBtn');
-    const printPreviewBtn = document.querySelector('.label-action-bar .action-btn'); // First button is Print Preview
+    const printPreviewBtn = document.querySelector('.action-btn[data-action="print-preview"]');
+    const exportJpegBtn = document.querySelector('.action-btn[data-action="export-jpeg"]');
 
     // Create a hidden file input for logo upload
     let logoFileInput = document.createElement('input');
@@ -33,20 +35,59 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initial state: only the gage select dropdown is fully visible/interactive.
     // Other sections are hidden or partially visible.
     function setInitialState() {
-         console.log('Setting initial state for Label Manager.');
-         if (labelTemplateSidebar) labelTemplateSidebar.classList.add('hidden');
-         // Settings panel: only gage select visible initially
-         if (labelSettingsPanel) {
-              labelSettingsPanel.classList.remove('hidden'); // Ensure panel is not fully hidden
-              labelSettingsPanel.classList.add('partially-visible-settings'); // Use a new class for partial visibility
-         }
-         if (labelActionBar) labelActionBar.classList.add('hidden');
-         if (labelPreviewDiv) {
-             labelPreviewDiv.classList.add('hidden');
-             labelPreviewDiv.style.border = 'none'; // No border when hidden
-         }
-         if (initialSelectionMessage) initialSelectionMessage.style.display = 'block';
-         if (templateSelectionMessage) templateSelectionMessage.style.display = 'none'; // Keep this hidden initially
+        // Reset form elements with null checks
+        const labelSize = document.getElementById('labelSize');
+        const includeBarcode = document.getElementById('includeBarcode');
+        const showStatusColor = document.getElementById('showStatusColor');
+        const smallFontBtn = document.querySelector('.font-size-btn[data-size="small"]');
+        const otherFontBtns = document.querySelectorAll('.font-size-btn:not([data-size="small"])');
+        const labelPreview = document.getElementById('labelPreview');
+        const initialMessage = document.getElementById('initialSelectionMessage');
+        const labelControls = document.querySelector('.label-controls');
+        const templateList = document.querySelector('.template-list');
+        const standardTemplate = document.querySelector('.template-item[data-template="standard"]');
+
+        // Set default template
+        if (standardTemplate) {
+            standardTemplate.classList.add('active');
+            selectedTemplate = 'standard';
+        }
+
+        // Reset form values if elements exist
+        if (labelSize) labelSize.value = '2x2';
+        if (includeBarcode) includeBarcode.checked = false;
+        if (showStatusColor) showStatusColor.checked = false;
+
+        // Reset font size buttons if they exist
+        if (smallFontBtn) smallFontBtn.classList.add('active');
+        if (otherFontBtns) {
+            otherFontBtns.forEach(btn => btn.classList.remove('active'));
+        }
+        
+        // Clear preview if it exists
+        if (labelPreview) {
+            labelPreview.innerHTML = '';
+            labelPreview.style.display = 'none';
+        }
+        
+        // Show initial message if it exists
+        if (initialMessage) {
+            initialMessage.style.display = 'block';
+            initialMessage.textContent = 'Please select a gage to begin';
+        }
+        
+        // Disable label controls if they exist
+        if (labelControls) {
+        labelControls.style.opacity = '0.5';
+        labelControls.style.pointerEvents = 'none';
+        }
+        
+        // Show template list but keep it disabled initially
+        if (templateList) {
+            templateList.style.display = 'block';
+            templateList.style.opacity = '0.7';
+            templateList.style.pointerEvents = 'none';
+        }
     }
 
     // Fetch gages and populate the dropdown
@@ -145,112 +186,140 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('Rendering label preview...', { selectedGageId, selectedTemplate, latestCalibration });
         if (!labelPreviewDiv) return;
 
-        // Only render if a gage, template, and calibration data are selected/available
-        if (selectedGageId && selectedTemplate && latestCalibration) {
             labelPreviewDiv.innerHTML = ''; // Clear previous content
             labelPreviewDiv.style.border = '1px dashed #ccc'; // Add border when content is shown
             if (initialSelectionMessage) initialSelectionMessage.style.display = 'none';
             labelPreviewDiv.classList.remove('hidden'); // Show the preview div
+        labelPreviewDiv.style.display = 'flex'; // Ensure it's a flex container for centering
 
-            // Get container dimensions
+        // Show initial message if no gage or template selected
+        if (!selectedGageId || !selectedTemplate) {
+            labelPreviewDiv.classList.add('hidden');
+            labelPreviewDiv.style.border = 'none';
+            if (initialSelectionMessage) initialSelectionMessage.style.display = 'block';
+            initialSelectionMessage.textContent = selectedGageId ? 'Please select a template to continue' : 'Please select a gage to begin';
+            return;
+        }
+
+        // Check if latestCalibration is available
+        if (!latestCalibration) {
+            const noCalMessage = document.createElement('p');
+            noCalMessage.textContent = 'No calibration data found for this gage.';
+            noCalMessage.style.color = 'orange';
+            noCalMessage.style.fontSize = '1.2rem'; // Adjust size as needed
+            noCalMessage.style.textAlign = 'center';
+            labelPreviewDiv.appendChild(noCalMessage);
+            labelPreviewDiv.style.border = '1px dashed #ccc';
+            labelPreviewDiv.classList.remove('hidden');
+            return;
+        }
+
+        // Get container dimensions for dynamic sizing
             const containerWidth = labelPreviewDiv.clientWidth;
             const containerHeight = labelPreviewDiv.clientHeight;
 
-            // Create and style elements with dynamic font sizing
-            const createStyledElement = (text, isTitle = false) => {
-                const element = document.createElement('p');
-                element.textContent = text;
-                const fontSize = calculateDynamicFontSize(
-                    containerWidth,
-                    containerHeight / (isTitle ? 3 : 4),
-                    text.length
-                );
-                element.style.fontSize = `${fontSize}px`;
-                element.style.margin = '2px 0';
-                element.style.textAlign = 'center';
-                element.style.width = '100%';
-                element.style.overflow = 'hidden';
-                element.style.textOverflow = 'ellipsis';
-                element.style.whiteSpace = 'nowrap';
-                return element;
-            };
+        // Use a flex column layout for stacking elements
+        labelPreviewDiv.style.flexDirection = 'column';
+        labelPreviewDiv.style.justifyContent = 'center';
+        labelPreviewDiv.style.alignItems = 'center';
+        labelPreviewDiv.style.padding = '10px'; // Add some padding
 
+        // Function to create text elements with basic styling
+        const createTextElement = (text, className = '') => {
+            const p = document.createElement('p');
+            p.textContent = text;
+            p.style.margin = '3px 0'; // Adjust spacing
+            p.style.padding = '0';
+            p.style.textAlign = 'center';
+            p.style.width = '100%'; // Occupy full width
+            if (className) p.classList.add(className);
+            return p;
+        };
+
+        // Render content based on selected template
+        if (selectedTemplate === 'standard') {
             // Find the gage name from the dropdown options
-            const selectedGageOption = selectGageElement ? selectGageElement.options[selectGageElement.selectedIndex] : null;
+            const selectedGageOption = document.getElementById('selectGage').options[document.getElementById('selectGage').selectedIndex];
             const gageName = selectedGageOption && selectedGageOption.textContent ? selectedGageOption.textContent.split(' - ')[1] : '';
 
-            // Add elements with dynamic sizing
-            const gageIdEl = createStyledElement(`Equipment ID: ${selectedGageId}${gageName ? ' (' + gageName + ')' : ''}`, true);
-            const calDateEl = createStyledElement(`Cal: ${latestCalibration.calibration_date}`);
-            const dueDateEl = createStyledElement(`Due: ${latestCalibration.next_due_date}`);
+            // Add text details
+            labelPreviewDiv.appendChild(createTextElement(`Equipment ID: ${selectedGageId}${gageName ? ' (' + gageName + ')' : ''}`));
+            labelPreviewDiv.appendChild(createTextElement(`Cal: ${latestCalibration.calibration_date}`));
+            labelPreviewDiv.appendChild(createTextElement(`Due: ${latestCalibration.next_due_date}`));
 
-            labelPreviewDiv.appendChild(gageIdEl);
-            labelPreviewDiv.appendChild(calDateEl);
-            labelPreviewDiv.appendChild(dueDateEl);
-
-            // Logo handling with dynamic sizing
+            // Add Logo/Placeholder
             if (uploadedLogo) {
                 const logoImg = document.createElement('img');
                 logoImg.src = uploadedLogo;
                 logoImg.alt = 'Logo';
-                const logoHeight = containerHeight * 0.2; // Logo takes 20% of container height
+                 // Basic styling, adjust size dynamically if needed
                 logoImg.style.cssText = `
-                    width: auto;
-                    height: ${logoHeight}px;
+                    max-width: 80%;
+                    max-height: 30%;
                     object-fit: contain;
-                    margin-top: 10px;
+                    margin: 10px auto; // Center the image and add vertical margin
                 `;
                 labelPreviewDiv.appendChild(logoImg);
             } else {
+                 // Placeholder if no logo uploaded
                 const logoPlaceholder = document.createElement('div');
-                const fontSize = calculateDynamicFontSize(containerWidth, containerHeight * 0.2, selectedGageId.length);
+                logoPlaceholder.textContent = 'Logo Area';
                 logoPlaceholder.style.cssText = `
-                    width: 90%;
-                    height: ${containerHeight * 0.2}px;
-                    background-color: #ccc;
-                    color: #333;
+                    width: 80%;
+                    height: 30%;
+                    background-color: #e0e0e0;
+                    color: #555;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    margin-top: 10px;
-                    font-size: ${fontSize}px;
-                    font-weight: bold;
+                    margin: 10px auto;
+                    font-size: 1rem;
+                    border-radius: 5px;
                 `;
-                logoPlaceholder.textContent = selectedGageId;
                 labelPreviewDiv.appendChild(logoPlaceholder);
             }
 
-            // Status display with dynamic sizing
-            if (showStatusColorCheckbox && showStatusColorCheckbox.checked && latestCalibration.calibration_result) {
-                const statusEl = createStyledElement(`Status: ${latestCalibration.calibration_result}`);
+            // Add Status with color
+            if (document.getElementById('showStatusColor').checked && latestCalibration.calibration_result) {
+                const statusText = `Status: ${latestCalibration.calibration_result.toUpperCase()}`;
+                const statusEl = createTextElement(statusText);
+                statusEl.style.fontWeight = 'bold'; // Make status text bold
+
+                // Set status color
                 if (latestCalibration.calibration_result.toLowerCase() === 'pass') {
                     statusEl.style.color = 'green';
                 } else if (latestCalibration.calibration_result.toLowerCase() === 'fail') {
                     statusEl.style.color = 'red';
+                } else {
+                    statusEl.style.color = '#333'; // Default color for other statuses
                 }
                 labelPreviewDiv.appendChild(statusEl);
             }
 
-        } else if (selectedGageId && selectedTemplate && !latestCalibration) {
-            // Show message if gage and template selected but no calibration data
-            const noCalMessage = document.createElement('p');
-            noCalMessage.textContent = 'No calibration data found for this gage.';
-            noCalMessage.style.color = 'orange';
-            const fontSize = calculateDynamicFontSize(
-                labelPreviewDiv.clientWidth,
-                labelPreviewDiv.clientHeight,
-                noCalMessage.textContent.length
-            );
-            noCalMessage.style.fontSize = `${fontSize}px`;
-            labelPreviewDiv.innerHTML = '';
-            labelPreviewDiv.appendChild(noCalMessage);
-            labelPreviewDiv.style.border = '1px dashed #ccc';
-            labelPreviewDiv.classList.remove('hidden');
-            if (initialSelectionMessage) initialSelectionMessage.style.display = 'none';
+            // TODO: Add barcode rendering logic if includeBarcode is checked
+            if (document.getElementById('includeBarcode').checked) {
+                 // Placeholder for barcode
+                 const barcodePlaceholder = document.createElement('div');
+                 barcodePlaceholder.textContent = 'Barcode Area';
+                  barcodePlaceholder.style.cssText = `
+                    width: 80%;
+                    height: 15%;
+                    background-color: #e0e0e0;
+                    color: #555;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 10px auto;
+                    font-size: 1rem;
+                    border-radius: 5px;
+                `;
+                 labelPreviewDiv.appendChild(barcodePlaceholder);
+            }
+
         } else {
-            labelPreviewDiv.classList.add('hidden');
-            labelPreviewDiv.style.border = 'none';
-            if (initialSelectionMessage) initialSelectionMessage.style.display = 'block';
+            // Handle other templates or a generic preview if needed
+            labelPreviewDiv.appendChild(createTextElement(`Preview for ${selectedTemplate} template for Gage ID: ${selectedGageId}`));
+            // You might add more specific rendering logic here for other templates
         }
     }
 
@@ -273,9 +342,42 @@ document.addEventListener('DOMContentLoaded', () => {
             const size = sizes[selectedLabelSize] || sizes['1x1']; // Default to 1x1 if size not found
             labelPreviewDiv.style.width = size.width;
             labelPreviewDiv.style.height = size.height;
-            labelPreviewDiv.style.border = selectedGageId ? '1px dashed #ccc' : 'none'; // Maintain border visibility
+            labelPreviewDiv.style.border = selectedGageId ? '1px dashed #ccc' : 'none';
+
+            // Adjust font sizes based on label size
+            const fontSizeMap = {
+                '2x2': { small: '12px', medium: '14px', large: '16px' },
+                '3x2': { small: '14px', medium: '16px', large: '18px' },
+                '1x1': { small: '8px', medium: '10px', large: '12px' },
+                '4x2': { small: '16px', medium: '18px', large: '20px' },
+                '4x6': { small: '18px', medium: '20px', large: '24px' },
+                '2x0.5': { small: '8px', medium: '10px', large: '12px' },
+                '3x1': { small: '10px', medium: '12px', large: '14px' },
+                '2x4': { small: '12px', medium: '14px', large: '16px' },
+                'custom': { small: '12px', medium: '14px', large: '16px' },
+            };
+
+            const fontSizes = fontSizeMap[selectedLabelSize] || fontSizeMap['custom'];
+            const activeSize = document.querySelector('.font-size-btn.active').dataset.size;
+            const fontSize = fontSizes[activeSize];
+
+            // Update all text elements in the preview
+            const textElements = labelPreviewDiv.querySelectorAll('p');
+            textElements.forEach(element => {
+                element.style.fontSize = fontSize;
+                element.style.lineHeight = '1.2';
+                element.style.margin = '2px 0';
+            });
+
+            // Adjust logo size
+            const logoImg = labelPreviewDiv.querySelector('img');
+            if (logoImg) {
+                const logoSize = Math.min(parseInt(size.width) * 0.3, parseInt(size.height) * 0.3);
+                logoImg.style.maxWidth = `${logoSize}px`;
+                logoImg.style.maxHeight = `${logoSize}px`;
+            }
         }
-         // Re-render preview to adjust content layout if needed
+        // Re-render preview to adjust content layout
          renderLabelPreview();
     }
 
@@ -508,38 +610,809 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to update the visibility of sections
     function updateSectionVisibility() {
-        // Sections are shown if BOTH a gage and a template are selected
-        const showSections = selectedGageId && selectedTemplate;
-        console.log('Updating section visibility. Show sections:', showSections);
-
-        if (labelTemplateSidebar) {
-            // Sidebar is always visible once a gage is selected
-            labelTemplateSidebar.classList.toggle('hidden', !selectedGageId);
+        const gageSelect = document.getElementById('selectGage');
+        const templateList = document.querySelector('.template-list');
+        const initialMessage = document.getElementById('initialSelectionMessage');
+        const previewArea = document.getElementById('labelPreview');
+        const labelControls = document.getElementById('labelControls');
+        const templateManagement = document.getElementById('templateManagement');
+        
+        if (!labelControls) {
+            console.warn('Label controls element not found');
+            return;
         }
-        if (labelSettingsPanel) {
-            const settingFormGroups = labelSettingsPanel.querySelectorAll('.form-group');
-            settingFormGroups.forEach(group => {
-                // Hide/show settings (except gage select) based on both gage and template being selected
-                if (!group.querySelector('#selectGage')) {
-                    group.classList.toggle('hidden', !showSections);
-                }
-            });
-             // Show settings panel partially if gage is selected but no template yet, or fully if both are selected
-             labelSettingsPanel.classList.toggle('hidden', !selectedGageId && !showSections); // Fully hide if neither selected
-             labelSettingsPanel.classList.toggle('partially-visible-settings', selectedGageId && !showSections); // Partially visible if gage selected but no template
-        }
-        if (labelActionBar) {
-            labelActionBar.classList.toggle('hidden', !showSections);
-        }
-        if (labelPreviewDiv) {
-             // Preview div visibility is handled by renderLabelPreview now
-             // labelPreviewDiv.classList.toggle('hidden', !showSections);
-             // labelPreviewDiv.style.border = showSections ? '1px dashed #ccc' : 'none';
-        }
-        if (initialSelectionMessage) {
-            // Initial message is shown if BOTH gage and template are NOT selected
-             initialSelectionMessage.style.display = (selectedGageId || selectedTemplate) ? 'none' : 'block';
+        
+        if (gageSelect.value) {
+            // Show template list when gage is selected
+            templateList.style.display = 'block';
+            templateList.style.opacity = '1';
+            templateList.style.pointerEvents = 'auto';
+            initialMessage.textContent = 'Please select a template to continue';
+            initialMessage.style.display = 'block';
+            previewArea.style.display = 'none';
+            templateManagement.style.display = 'block';
+            
+            // Enable controls when gage is selected
+            labelControls.style.opacity = '1';
+            labelControls.style.pointerEvents = 'auto';
+        } else {
+            // Reset to initial state
+            templateList.style.display = 'block';
+            templateList.style.opacity = '0.7';
+            templateList.style.pointerEvents = 'none';
+            initialMessage.textContent = 'Please select a gage to begin';
+            initialMessage.style.display = 'block';
+            previewArea.style.display = 'none';
+            templateManagement.style.display = 'none';
+            labelControls.style.opacity = '0.5';
+            labelControls.style.pointerEvents = 'none';
         }
     }
 
+    // Update the template list display
+    function updateTemplateList(templates) {
+        const savedTemplatesList = document.getElementById('savedTemplatesList');
+        if (!savedTemplatesList) return;
+
+        savedTemplatesList.innerHTML = '';
+
+        if (!templates || templates.length === 0) {
+            const noTemplates = document.createElement('p');
+            noTemplates.textContent = 'No saved templates found.';
+            noTemplates.style.color = '#666';
+            savedTemplatesList.appendChild(noTemplates);
+            return;
+        }
+
+        // Create table for templates
+        const table = document.createElement('table');
+        table.style.cssText = `
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        `;
+
+        // Add header row
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        const headers = ['Gage ID', 'Calibration Date', 'Actions'];
+        headers.forEach(headerText => {
+            const th = document.createElement('th');
+            th.textContent = headerText;
+            th.style.cssText = `
+                padding: 8px;
+                text-align: left;
+                border-bottom: 2px solid #ddd;
+                background-color: #f8f9fa;
+            `;
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Add template rows
+        const tbody = document.createElement('tbody');
+        templates.forEach(template => {
+            const row = document.createElement('tr');
+            row.style.cssText = `
+                border-bottom: 1px solid #ddd;
+                transition: background-color 0.2s;
+            `;
+            row.onmouseover = () => row.style.backgroundColor = '#f8f9fa';
+            row.onmouseout = () => row.style.backgroundColor = 'white';
+
+            // Gage ID cell
+            const gageCell = document.createElement('td');
+            gageCell.textContent = template.gage_id;
+            gageCell.style.padding = '8px';
+            row.appendChild(gageCell);
+
+            // Calibration Date cell
+            const calDateCell = document.createElement('td');
+            calDateCell.textContent = template.calibration_date;
+            calDateCell.style.padding = '8px';
+            row.appendChild(calDateCell);
+
+            // Actions cell
+            const actionsCell = document.createElement('td');
+            actionsCell.style.padding = '8px';
+
+            // Print button
+            const printBtn = document.createElement('button');
+            printBtn.textContent = 'Print Label';
+            printBtn.className = 'action-btn';
+            printBtn.style.cssText = `
+                padding: 4px 8px;
+                border-radius: 4px;
+                border: 1px solid #007bff;
+                background-color: white;
+                color: #007bff;
+                cursor: pointer;
+                transition: all 0.2s;
+            `;
+            printBtn.onmouseover = () => {
+                printBtn.style.backgroundColor = '#007bff';
+                printBtn.style.color = 'white';
+            };
+            printBtn.onmouseout = () => {
+                printBtn.style.backgroundColor = 'white';
+                printBtn.style.color = '#007bff';
+            };
+            printBtn.onclick = () => printLabel(template);
+
+            actionsCell.appendChild(printBtn);
+
+            // Add delete button for admin users
+            if (currentUserRole === 'admin') {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.innerHTML = '&times;';
+                deleteBtn.className = 'delete-template-btn';
+                deleteBtn.style.cssText = `
+                    margin-left: 8px;
+                    background: none;
+                    border: none;
+                    color: #dc3545;
+                    font-size: 18px;
+                    cursor: pointer;
+                    padding: 0 5px;
+                    opacity: 0.7;
+                    transition: opacity 0.2s;
+                `;
+                deleteBtn.onmouseover = () => deleteBtn.style.opacity = '1';
+                deleteBtn.onmouseout = () => deleteBtn.style.opacity = '0.7';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    deleteTemplate(template.id);
+                };
+                actionsCell.appendChild(deleteBtn);
+            }
+
+            row.appendChild(actionsCell);
+            tbody.appendChild(row);
+        });
+
+        table.appendChild(tbody);
+        savedTemplatesList.appendChild(table);
+    }
+
+    // Update UI based on user role
+    function updateUIForUserRole() {
+        const adminControls = document.getElementById('adminControls');
+        const templateList = document.querySelector('.template-list');
+        const labelControls = document.getElementById('labelControls');
+        const templateManagement = document.getElementById('templateManagement');
+        
+        if (currentUserRole === 'admin') {
+            if (adminControls) adminControls.style.display = 'block';
+            if (templateList) {
+                templateList.style.pointerEvents = 'auto';
+                templateList.style.opacity = '1';
+            }
+            if (labelControls) {
+                labelControls.style.opacity = '1';
+                labelControls.style.pointerEvents = 'auto';
+            }
+            if (templateManagement) {
+                templateManagement.style.display = 'block';
+            }
+        } else {
+            // For non-admin users, only show saved templates
+            if (adminControls) adminControls.style.display = 'none';
+            if (templateList) templateList.style.display = 'none';
+            if (labelControls) labelControls.style.display = 'none';
+            if (templateManagement) {
+                templateManagement.style.display = 'block';
+                templateManagement.style.marginTop = '0';
+                templateManagement.style.borderTop = 'none';
+                templateManagement.style.paddingTop = '0';
+            }
+        }
+    }
+
+    // Add these functions for template management
+    async function saveTemplate() {
+        if (currentUserRole !== 'admin') {
+            showNotification('Only administrators can save templates.', 'error');
+            return;
+        }
+
+        const selectedGage = document.getElementById('selectGage').value;
+        if (!selectedGage) {
+            showNotification('Please select a gage first.', 'error');
+            return;
+        }
+
+        // Create and show the save template modal
+        const modal = document.createElement('div');
+        modal.className = 'template-save-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        `;
+
+        const modalContent = document.createElement('div');
+        modalContent.style.cssText = `
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        `;
+
+        const title = document.createElement('h3');
+        title.textContent = 'Save Template';
+        title.style.marginBottom = '20px';
+        title.style.color = '#333';
+
+        const form = document.createElement('form');
+        form.style.display = 'flex';
+        form.style.flexDirection = 'column';
+        form.style.gap = '15px';
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.placeholder = 'Enter template name';
+        nameInput.required = true;
+        nameInput.style.cssText = `
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+            width: 100%;
+            box-sizing: border-box;
+        `;
+
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = `
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        `;
+
+        const saveButton = document.createElement('button');
+        saveButton.textContent = 'Save';
+        saveButton.className = 'action-btn btn-primary';
+        saveButton.type = 'submit';
+        saveButton.style.cssText = `
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        `;
+
+        const cancelButton = document.createElement('button');
+        cancelButton.textContent = 'Cancel';
+        cancelButton.className = 'action-btn';
+        cancelButton.type = 'button';
+        cancelButton.style.cssText = `
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            background-color: white;
+            cursor: pointer;
+        `;
+        cancelButton.onclick = () => document.body.removeChild(modal);
+
+        buttonContainer.appendChild(cancelButton);
+        buttonContainer.appendChild(saveButton);
+
+        form.appendChild(nameInput);
+        form.appendChild(buttonContainer);
+        modalContent.appendChild(title);
+        modalContent.appendChild(form);
+        modal.appendChild(modalContent);
+        document.body.appendChild(modal);
+
+        // Handle form submission
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const templateName = nameInput.value.trim();
+            if (!templateName) return;
+
+            const templateData = {
+                labelSize: document.getElementById('labelSize').value,
+                fontSize: document.querySelector('.font-size-btn.active').dataset.size,
+                includeBarcode: document.getElementById('includeBarcode').checked,
+                showStatusColor: document.getElementById('showStatusColor').checked
+            };
+
+            try {
+                const token = localStorage.getItem('authToken');
+                const response = await fetch('http://127.0.0.1:5005/api/label-templates', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        gage_id: selectedGage,
+                        template_name: templateName,
+                        template_data: templateData
+                    })
+                });
+
+                if (response.ok) {
+                    showNotification('Template saved successfully!', 'success');
+                    document.body.removeChild(modal);
+                    await loadSavedTemplates();
+                } else {
+                    throw new Error('Failed to save template');
+                }
+            } catch (error) {
+                console.error('Error saving template:', error);
+                showNotification('Failed to save template. Please try again.', 'error');
+            }
+        };
+
+        // Focus the input
+        nameInput.focus();
+    }
+
+    // Show notification function
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = 'notification';
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 4px;
+            color: white;
+            font-size: 14px;
+            z-index: 1001;
+            animation: slideIn 0.3s ease-out;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        `;
+
+        // Set background color based on type
+        switch (type) {
+            case 'success':
+                notification.style.backgroundColor = '#28a745';
+                break;
+            case 'error':
+                notification.style.backgroundColor = '#dc3545';
+                break;
+            default:
+                notification.style.backgroundColor = '#17a2b8';
+        }
+
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        // Remove notification after 3 seconds
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease-out';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    document.body.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+    }
+
+    async function loadTemplates() {
+        try {
+            const selectedGage = document.getElementById('selectGage').value;
+            if (!selectedGage) return;
+
+            const response = await fetch(`http://127.0.0.1:5005/api/label-templates?gage_id=${selectedGage}`);
+            if (response.ok) {
+                const templates = await response.json();
+                updateTemplateList(templates);
+            }
+        } catch (error) {
+            console.error('Error loading templates:', error);
+        }
+    }
+
+    async function loadTemplate(template) {
+        // Update form fields with template data
+        document.getElementById('labelSize').value = template.template_data.size;
+        document.getElementById('includeBarcode').checked = template.template_data.includeBarcode;
+        document.getElementById('showStatusColor').checked = template.template_data.showStatusColor;
+        
+        // Set font size
+        const fontSizeBtn = document.querySelector(`.font-size-btn[data-size="${template.template_data.fontSize}"]`);
+        if (fontSizeBtn) {
+            document.querySelectorAll('.font-size-btn').forEach(btn => btn.classList.remove('active'));
+            fontSizeBtn.classList.add('active');
+        }
+
+        // Update preview
+        updateLabelPreview();
+    }
+
+    // Initialize when the page loads
+    async function initializeLabelManager() {
+        try {
+            // Get token from localStorage
+            const token = localStorage.getItem('authToken');
+            console.log('Token found:', !!token);
+
+            if (!token) {
+                showNotification('Please log in to access the label manager', 'error');
+                return;
+            }
+
+            // Check user role with token
+            const response = await fetch('http://127.0.0.1:5005/api/auth/me', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            console.log('Auth response status:', response.status);
+
+            if (response.ok) {
+                const user = await response.json();
+                console.log('User data:', user);
+                currentUserRole = user.role;
+                
+                // Get all required elements
+                const labelTemplateSidebar = document.querySelector('.label-template-sidebar');
+                const labelSettingsPanel = document.querySelector('.label-settings-panel');
+                const labelActionBar = document.querySelector('.label-action-bar');
+                const adminControls = document.getElementById('adminControls');
+                const templateManagement = document.getElementById('templateManagement');
+
+                // Update UI based on role
+                if (currentUserRole === 'admin') {
+                    // Show admin interface
+                    if (labelTemplateSidebar) labelTemplateSidebar.style.display = 'block';
+                    if (labelSettingsPanel) labelSettingsPanel.style.display = 'block';
+                    if (labelActionBar) labelActionBar.style.display = 'flex';
+                    if (adminControls) adminControls.style.display = 'block';
+                    if (templateManagement) templateManagement.style.display = 'block';
+                } else {
+                    // Show user interface - only saved templates
+                    if (labelTemplateSidebar) labelTemplateSidebar.style.display = 'none';
+                    if (labelSettingsPanel) labelSettingsPanel.style.display = 'none';
+                    if (labelActionBar) labelActionBar.style.display = 'none';
+                    if (adminControls) adminControls.style.display = 'none';
+                    
+                    // Ensure template management is visible and centered for non-admins
+                    if (templateManagement) {
+                        templateManagement.style.display = 'block'; // Explicitly show
+                        templateManagement.style.width = '100%';
+                        templateManagement.style.maxWidth = '800px';
+                        templateManagement.style.margin = '20px auto';
+                    }
+                }
+                
+                // Wait for savedTemplatesList to be available before loading templates
+                const savedTemplatesList = await waitForElement('savedTemplatesList');
+                if (savedTemplatesList) {
+                   await loadSavedTemplates();
+                } else {
+                    console.error('savedTemplatesList element not available after waiting.');
+                    showNotification('Error loading templates: Required element not found.', 'error');
+                }
+
+            } else if (response.status === 401) {
+                localStorage.removeItem('authToken');
+                showNotification('Session expired. Please log in again.', 'error');
+                window.location.href = 'pages/login.html';
+            } else {
+                showNotification('Authentication failed. Please try again.', 'error');
+            }
+        } catch (error) {
+            console.error('Error initializing label manager:', error);
+            showNotification('Error initializing label manager', 'error');
+        }
+    }
+
+    // Helper function to wait for an element to exist
+    function waitForElement(id, timeout = 5000) {
+        return new Promise((resolve, reject) => {
+            const element = document.getElementById(id);
+            if (element) {
+                return resolve(element);
+            }
+
+            const observer = new MutationObserver(() => {
+                const element = document.getElementById(id);
+                if (element) {
+                    observer.disconnect();
+                    resolve(element);
+                }
+            });
+
+            observer.observe(document.body, { childList: true, subtree: true });
+
+            setTimeout(() => {
+                observer.disconnect();
+                resolve(null); // Resolve with null if element not found within timeout
+            }, timeout);
+        });
+    }
+
+    // Load saved templates from backend
+    async function loadSavedTemplates() {
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                showNotification('Please log in to view templates', 'error');
+                return;
+            }
+
+            const response = await fetch('http://127.0.0.1:5005/api/label-templates', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (response.ok) {
+                const templates = await response.json();
+                displaySavedTemplates(templates);
+            } else if (response.status === 401) {
+                localStorage.removeItem('authToken');
+                showNotification('Session expired. Please log in again.', 'error');
+                window.location.href = 'pages/login.html';
+            } else {
+                showNotification('Failed to load templates', 'error');
+            }
+        } catch (error) {
+            console.error('Error loading templates:', error);
+            showNotification('Error loading saved templates', 'error');
+        }
+    }
+
+    // Display saved templates in a table format
+    function displaySavedTemplates(templates) {
+        // Get savedTemplatesList inside this function to ensure it's available
+        const savedTemplatesList = document.getElementById('savedTemplatesList');
+        if (!savedTemplatesList) {
+            console.error('savedTemplatesList element not found in displaySavedTemplates');
+            return;
+        }
+
+        savedTemplatesList.innerHTML = '';
+
+        if (!templates || templates.length === 0) {
+            const noTemplates = document.createElement('p');
+            noTemplates.textContent = 'No saved templates found.';
+            noTemplates.style.color = '#666';
+            savedTemplatesList.appendChild(noTemplates);
+            return;
+        }
+
+        // Create table
+        const table = document.createElement('table');
+        table.style.cssText = `
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        `;
+
+        // Add header row
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        const headers = ['Gage ID', 'Template Name', 'Last Updated', 'Actions'];
+        headers.forEach(headerText => {
+            const th = document.createElement('th');
+            th.textContent = headerText;
+            th.style.cssText = `
+                padding: 12px 15px;
+                text-align: left;
+                border-bottom: 2px solid #ddd;
+                background-color: #f8f9fa;
+                font-weight: 600;
+                color: #333;
+            `;
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Add template rows
+        const tbody = document.createElement('tbody');
+        templates.forEach(template => {
+            const row = document.createElement('tr');
+            row.style.cssText = `
+                border-bottom: 1px solid #eee;
+                transition: background-color 0.2s;
+            `;
+            row.onmouseover = () => row.style.backgroundColor = '#f8f9fa';
+            row.onmouseout = () => row.style.backgroundColor = 'white';
+
+            // Gage ID cell
+            const gageCell = document.createElement('td');
+            gageCell.textContent = template.gage_id;
+            gageCell.style.padding = '12px 15px';
+            row.appendChild(gageCell);
+
+            // Template Name cell
+            const nameCell = document.createElement('td');
+            nameCell.textContent = template.template_name;
+            nameCell.style.padding = '12px 15px';
+            row.appendChild(nameCell);
+
+            // Last Updated cell
+            const dateCell = document.createElement('td');
+            dateCell.textContent = new Date(template.updated_at).toLocaleDateString();
+            dateCell.style.padding = '12px 15px';
+            row.appendChild(dateCell);
+
+            // Actions cell
+            const actionsCell = document.createElement('td');
+            actionsCell.style.padding = '12px 15px';
+
+            // Print button
+            const printBtn = document.createElement('button');
+            printBtn.textContent = 'Print Label';
+            printBtn.className = 'action-btn';
+            printBtn.style.cssText = `
+                padding: 6px 12px;
+                border-radius: 4px;
+                border: 1px solid #007bff;
+                background-color: white;
+                color: #007bff;
+                cursor: pointer;
+                transition: all 0.2s;
+            `;
+            printBtn.onmouseover = () => {
+                printBtn.style.backgroundColor = '#007bff';
+                printBtn.style.color = 'white';
+            };
+            printBtn.onmouseout = () => {
+                printBtn.style.backgroundColor = 'white';
+                printBtn.style.color = '#007bff';
+            };
+            printBtn.onclick = () => printLabel(template);
+            actionsCell.appendChild(printBtn);
+
+            // Add delete button for admin users
+            if (currentUserRole === 'admin') {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.innerHTML = '&times;';
+                deleteBtn.className = 'delete-template-btn';
+                deleteBtn.style.cssText = `
+                    margin-left: 8px;
+                    background: none;
+                    border: none;
+                    color: #dc3545;
+                    font-size: 18px;
+                    cursor: pointer;
+                    padding: 0 5px;
+                    opacity: 0.7;
+                    transition: opacity 0.2s;
+                `;
+                deleteBtn.onmouseover = () => deleteBtn.style.opacity = '1';
+                deleteBtn.onmouseout = () => deleteBtn.style.opacity = '0.7';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    deleteTemplate(template.id);
+                };
+                actionsCell.appendChild(deleteBtn);
+            }
+
+            row.appendChild(actionsCell);
+            tbody.appendChild(row);
+        });
+
+        table.appendChild(tbody);
+        savedTemplatesList.appendChild(table);
+    }
+
+    // Print label function
+    async function printLabel(template) {
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                showNotification('Please log in to print labels', 'error');
+                return;
+            }
+
+            const response = await fetch(`http://127.0.0.1:5005/api/calibrations?gage_id=${template.gage_id}&limit=1&order_by=calibration_date desc`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (response.ok) {
+                const calibrations = await response.json();
+                if (calibrations && calibrations.length > 0) {
+                    const latestCalibration = calibrations[0];
+                    
+                    // Create a print window
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(`
+                        <html>
+                            <head>
+                                <title>Print Label</title>
+                                <style>
+                                    body {
+                                        margin: 0;
+                                        padding: 20px;
+                                        display: flex;
+                                        justify-content: center;
+                                        align-items: center;
+                                        min-height: 100vh;
+                                    }
+                                    .label-preview {
+                                        border: 1px solid #ccc;
+                                        padding: 10px;
+                                        text-align: center;
+                                        background-color: white;
+                                    }
+                                </style>
+                            </head>
+                            <body>
+                                <div class="label-preview">
+                                    <p>Equipment ID: ${template.gage_id}</p>
+                                    <p>Calibration Date: ${latestCalibration.calibration_date}</p>
+                                    <p>Next Due: ${latestCalibration.next_due_date}</p>
+                                    <p>Status: ${latestCalibration.calibration_result}</p>
+                                </div>
+                            </body>
+                        </html>
+                    `);
+                    printWindow.document.close();
+                    
+                    // Wait for content to load then print
+                    setTimeout(() => {
+                        printWindow.print();
+                    }, 500);
+                } else {
+                    showNotification('No calibration data found for this gage', 'error');
+                }
+            }
+        } catch (error) {
+            console.error('Error printing label:', error);
+            showNotification('Failed to print label', 'error');
+        }
+    }
+
+    // Delete template function (admin only)
+    async function deleteTemplate(templateId) {
+        if (currentUserRole !== 'admin') {
+            showNotification('Only administrators can delete templates', 'error');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to delete this template?')) return;
+
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                showNotification('Please log in to delete templates', 'error');
+                return;
+            }
+
+            const response = await fetch(`http://127.0.0.1:5005/api/label-templates/${templateId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                showNotification('Template deleted successfully', 'success');
+                await loadSavedTemplates();
+            } else {
+                throw new Error('Failed to delete template');
+            }
+        } catch (error) {
+            console.error('Error deleting template:', error);
+            showNotification('Failed to delete template', 'error');
+        }
+    }
+
+    // Initialize the label manager
+    initializeLabelManager();
 }); 

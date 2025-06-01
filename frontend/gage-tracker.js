@@ -46,8 +46,9 @@ async function loadIssueLogs() {
             adminTableContainer.innerHTML = `
                 <div class="table-section">
                     <h3>All Gage Issue Logs</h3>
-                    <table class="data-table">
-                        <thead>
+                    <div class="table-container" style="max-height: 600px; overflow: auto;">
+                        <table class="data-table" id="issue-log-table">
+                            <thead>
                             <tr>
                                 <th>Issue ID</th>
                                 <th>Gage ID</th>
@@ -210,8 +211,8 @@ function renderUserHandledTable(logs, userRole) {
         return;
     }
 
-    // Sort logs by issue_date in descending order (most recent first)
-    logs.sort((a, b) => new Date(b.issue_date) - new Date(a.issue_date));
+    // Sort logs by issue_date in ascending order
+    logs.sort((a, b) => new Date(a.issue_date) - new Date(b.issue_date));
 
     logs.forEach(log => {
         const tr = document.createElement('tr');
@@ -251,8 +252,8 @@ function renderUserReturnedTable(logs, userRole) {
         return;
     }
 
-    // Sort logs by return_date in descending order (most recent first)
-    logs.sort((a, b) => new Date(b.return_date) - new Date(a.return_date));
+    // Sort logs by return_date in ascending order
+    logs.sort((a, b) => new Date(a.return_date) - new Date(b.return_date));
 
     logs.forEach(log => {
         const tr = document.createElement('tr');

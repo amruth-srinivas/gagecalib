@@ -185,3 +185,24 @@ async def get_async_db():
             yield session
         finally:
             await session.close()
+
+class LabelTemplate(Base):
+    __tablename__ = "label_templates"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    gage_id = Column(Integer, ForeignKey("gages.gage_id"), nullable=False)
+    template_name = Column(String(100), nullable=False)
+    template_data = Column(JSON, nullable=False)  # Stores template configuration
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    gage = relationship("Gage", back_populates="label_templates")
+    creator = relationship("User", back_populates="created_templates")
+
+# Add relationship to User model
+User.created_templates = relationship("LabelTemplate", back_populates="creator")
+
+# Add relationship to Gage model
+Gage.label_templates = relationship("LabelTemplate", back_populates="gage")

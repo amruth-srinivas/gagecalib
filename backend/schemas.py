@@ -189,3 +189,24 @@ class CalibrationMeasurementResponse(CalibrationMeasurementBase):
     
     class Config:
         orm_mode = True
+
+class LabelTemplateBase(BaseModel):
+    gage_id: int
+    template_name: str
+    template_data: dict
+
+class LabelTemplateCreate(LabelTemplateBase):
+    pass
+
+class LabelTemplateUpdate(BaseModel):
+    template_name: Optional[str] = None
+    template_data: Optional[dict] = None
+
+class LabelTemplateResponse(LabelTemplateBase):
+    id: int
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
