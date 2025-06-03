@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Label Manager</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+</head>
+<body>
+    <div class="label-manager-container">
+        <!-- Left Sidebar (Template Selection) -->
+        <div class="label-template-sidebar">
+            <div class="search-bar">
+                <input type="text" id="templateSearch" placeholder="Search templates...">
+            </div>
+            <ul class="template-list">
+                <li class="template-item active" data-template="standard">Standard Label</li>
+                <li class="template-item" data-template="external">External Vendor Label</li>
+                <li class="template-item" data-template="compact">Compact Label</li>
+            </ul>
+        </div>
+
+        <!-- Center Preview Area -->
+        <div class="label-preview-area">
+            <div id="labelPreview"></div>
+            <p id="initialSelectionMessage">Please select a gage to begin</p>
+        </div>
+
+        <!-- Right Settings Panel -->
+        <div class="label-settings-panel">
+            <h4>Label Settings</h4>
+            <div class="form-group">
+                <label for="selectGage">Select Gage:</label>
+                <select id="selectGage" required>
+                    <option value="">-- Select a Gage --</option>
+                    <!-- Gage options will be populated by JS -->
+                </select>
+            </div>
+            <div id="labelControls" class="label-controls">
+                <div class="form-group">
+                    <label for="labelSize">Label Size:</label>
+                    <select id="labelSize">
+                        <option value="2x2">2" x 2"</option>
+                        <option value="3x2">3" x 2"</option>
+                        <option value="1x1">1" x 1"</option>
+                        <option value="4x2">4" x 2"</option>
+                        <option value="4x6">4" x 6"</option>
+                        <option value="2x0.5">2" x 0.5"</option>
+                        <option value="3x1">3" x 1"</option>
+                        <option value="2x4">2" x 4"</option>
+                        <option value="custom">Custom (250x150px)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Options:</label>
+                    <div>
+                        <input type="checkbox" id="includeBarcode">
+                        <label for="includeBarcode">Include Barcode</label>
+                    </div>
+                    <div>
+                        <input type="checkbox" id="showStatusColor">
+                        <label for="showStatusColor">Show Status Color</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Font Size:</label>
+                    <div class="font-size-buttons">
+                        <button class="action-btn font-size-btn active" data-size="small">Small</button>
+                        <button class="action-btn font-size-btn" data-size="medium">Medium</button>
+                        <button class="action-btn font-size-btn" data-size="large">Large</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Template Management Section -->
+            <div id="templateManagement" class="template-management" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+                <h4>Saved Templates</h4>
+                <div id="savedTemplatesList" class="saved-templates-list" style="max-height: 200px; overflow-y: auto; margin: 10px 0;">
+                    <!-- Templates will be populated here -->
+                </div>
+                <div id="adminControls" class="admin-controls" style="display: none;">
+                    <button class="action-btn btn-primary" onclick="saveTemplate()">Save Current as Template</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Action Bar -->
+    <div class="label-action-bar">
+        <button class="action-btn" onclick="printLabel()">Print Preview</button>
+        <button class="action-btn" id="uploadLogoBtn">Upload Logo</button>
+        <input type="file" id="labelLogoInput" accept="image/*" style="display:none;" />
+        <button class="action-btn btn-primary" onclick="saveTemplate()">Save Template</button>
+    </div>
+
+    <script src="label-manager.js"></script>
+</body>
+</html> 
