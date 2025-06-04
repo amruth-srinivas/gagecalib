@@ -1,12 +1,28 @@
 let calendar;
 let calibrationData = []; // Store all calibration data
 let gageMap = {};
+let currentUserId = null; // This should be set when user logs in
+let notifications = [];
 
 document.addEventListener('DOMContentLoaded', async function() {
+    // Get user role from localStorage
+    const userRole = localStorage.getItem('userRole');
+    
+    // Show Add Calibration button only for admin users
+    const addCalibrationBtn = document.getElementById('addCalibrationBtn');
+    if (addCalibrationBtn) {
+        addCalibrationBtn.style.display = userRole === 'admin' ? 'block' : 'none';
+    }
+
     await loadGageMap();
     calendar = initializeCalendar();
     await loadCalibrationData();
     setupEventListeners();
+    
+    // Load notifications if user is logged in
+    if (currentUserId) {
+        await loadNotifications();
+    }
 });
 
 function setupEventListeners() {
@@ -28,6 +44,7 @@ function initializeCalendar() {
         return null;
     }
 
+    const userRole = localStorage.getItem('userRole');
     const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         height: 'auto',
@@ -36,6 +53,11 @@ function initializeCalendar() {
             center: 'title',
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
         },
+        // Disable date selection and event creation for non-admin users
+        selectable: userRole === 'admin',
+        selectMirror: userRole === 'admin',
+        editable: userRole === 'admin',
+        droppable: userRole === 'admin',
         
         eventContent: function(arg) {
             // Show gage name (bold) and ID (smaller, lighter, with 'ID:')
@@ -210,29 +232,34 @@ function initializeCalendar() {
             document.addEventListener('keydown', closeOnEscape);
         },
         events: function(info, successCallback, failureCallback) {
-            if (calibrationData.length > 0) {
-                const events = calibrationData.map(schedule => ({
-                    id: schedule.id || schedule.calibration_id,
-                    title: `Calibration: ${schedule.gage_id || schedule.inventory_item}`,
-                    start: schedule.next_due_date || schedule.next_calibration,
-                    className: getStatusClass(schedule),
-                    extendedProps: {
-                        gageId: schedule.gage_id || schedule.inventory_item,
-                        type: schedule.calibration_type,
-                        frequency: schedule.frequency_days,
-                        remarks: schedule.remarks || '',
-                        status: getStatus(schedule),
-                        calibration_date: schedule.calibration_date,
-                        calibrated_by: schedule.calibrated_by,
-                        calibration_method: schedule.calibration_method,
-                        calibration_result: schedule.calibration_result,
-                        deviation_recorded: schedule.deviation_recorded,
-                        certificate_number: schedule.certificate_number
-                    }
-                }));
-                successCallback(events);
-            } else {
-                failureCallback(new Error('No calibration data available'));
+            try {
+                if (calibrationData.length > 0) {
+                    const events = calibrationData.map(schedule => ({
+                        id: schedule.id || schedule.calibration_id,
+                        title: `Calibration: ${gageMap[schedule.gage_id] || schedule.gage_id}`,
+                        start: schedule.next_due_date || schedule.calibration_date,
+                        className: getStatusClass(schedule),
+                        extendedProps: {
+                            gageId: schedule.gage_id,
+                            type: schedule.calibration_type,
+                            frequency: schedule.frequency_days,
+                            remarks: schedule.remarks || '',
+                            status: getStatus(schedule),
+                            calibration_date: schedule.calibration_date,
+                            calibrated_by: schedule.calibrated_by,
+                            calibration_method: schedule.calibration_method,
+                            calibration_result: schedule.calibration_result,
+                            deviation_recorded: schedule.deviation_recorded,
+                            certificate_number: schedule.certificate_number
+                        }
+                    }));
+                    successCallback(events);
+                } else {
+                    successCallback([]); // Return empty array instead of failing
+                }
+            } catch (error) {
+                console.error('Error loading events:', error);
+                failureCallback(error);
             }
         }
     });
@@ -459,13 +486,45 @@ async function loadCalibrationData() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        calibrationData = data;
-        renderCalibrationTable(data);
+        
+        // Ensure data is in the correct format and handle missing fields gracefully
+        calibrationData = data.map(item => ({
+            ...item,
+            id: item.calibration_id || item.id,
+            start: item.next_due_date || item.calibration_date,
+            title: `Calibration: ${gageMap[item.gage_id] || item.gage_id || 'Unknown'}`,
+            extendedProps: {
+                gageId: item.gage_id || '',
+                type: item.calibration_type || '',
+                frequency: item.frequency_days || 0,
+                remarks: item.remarks || '',
+                status: getStatus(item),
+                calibration_date: item.calibration_date || '',
+                calibrated_by: item.calibrated_by || '',
+                calibration_method: item.calibration_method || '',
+                calibration_result: item.calibration_result || '',
+                deviation_recorded: item.deviation_recorded || '',
+                certificate_number: item.certificate_number || '',
+                notification_sent: item.notification_sent || false,
+                notification_sent_date: item.notification_sent_date || null,
+                notification_read: item.notification_read || false,
+                notification_read_date: item.notification_read_date || null
+            }
+        }));
+        
+        console.log('Loaded calibration data:', calibrationData); // Debug log
+        
+        // Update the table view
+        renderCalibrationTable(calibrationData);
+        
+        // If calendar exists, refresh it
         if (calendar) {
             calendar.refetchEvents();
         }
-        return data;
+        
+        return calibrationData;
     } catch (error) {
+        console.error('Error loading calibration data:', error);
         showNotification('Failed to load calibration data', true);
         return [];
     }
@@ -1159,8 +1218,204 @@ function formatDate(dateString) {
 }
 
 // Placeholder function for sending email - replace with actual implementation
-function sendEmailNotification(details) {
-    console.log('Sending email notification for:', details);
-    // TODO: Implement actual email sending logic here
-    showNotification('Email notification sent (placeholder)', false);
+async function sendEmailNotification(details) {
+    try {
+        const response = await fetch(`http://127.0.0.1:5005/api/calibrations/${details.calibration_id}/send-notification`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to send email notification');
+        }
+
+        const result = await response.json();
+        
+        // Show success dialog
+        const successDialog = document.createElement('div');
+        successDialog.className = 'modal';
+        successDialog.innerHTML = `
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Success</h5>
+                        <button type="button" class="close-btn" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Email notification has been sent successfully.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="this.closest('.modal').remove()">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(successDialog);
+        successDialog.style.display = 'flex';
+
+        // Add close handlers
+        const closeButtons = successDialog.querySelectorAll('.close-btn');
+        closeButtons.forEach(btn => {
+            btn.onclick = () => successDialog.remove();
+        });
+
+        // Close on backdrop click
+        successDialog.onclick = (e) => {
+            if (e.target === successDialog) successDialog.remove();
+        };
+
+    } catch (error) {
+        console.error('Error sending email notification:', error);
+        showNotification('Failed to send email notification', true);
+    }
+}
+
+// Add this function to load notifications
+async function loadNotifications() {
+    if (!currentUserId) return;
+    
+    try {
+        const response = await fetch(`http://127.0.0.1:5005/api/calibrations/notifications/${currentUserId}`);
+        if (!response.ok) throw new Error('Failed to fetch notifications');
+        
+        notifications = await response.json();
+        updateNotificationPanel();
+    } catch (error) {
+        console.error('Error loading notifications:', error);
+    }
+}
+
+// Add this function to update the notification panel
+function updateNotificationPanel() {
+    let notificationPanel = document.getElementById('notificationPanel');
+    if (!notificationPanel) {
+        notificationPanel = document.createElement('div');
+        notificationPanel.id = 'notificationPanel';
+        notificationPanel.className = 'notification-panel';
+        document.body.appendChild(notificationPanel);
+        
+        // Add notification panel styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .notification-panel {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                width: 300px;
+                max-height: 400px;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                z-index: 1000;
+                overflow-y: auto;
+            }
+            
+            .notification-header {
+                padding: 10px 15px;
+                background: #f8f9fa;
+                border-bottom: 1px solid #dee2e6;
+                border-radius: 8px 8px 0 0;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .notification-title {
+                font-weight: 600;
+                color: #333;
+            }
+            
+            .notification-count {
+                background: #dc3545;
+                color: white;
+                padding: 2px 8px;
+                border-radius: 12px;
+                font-size: 0.8em;
+            }
+            
+            .notification-list {
+                padding: 0;
+                margin: 0;
+                list-style: none;
+            }
+            
+            .notification-item {
+                padding: 12px 15px;
+                border-bottom: 1px solid #eee;
+                cursor: pointer;
+                transition: background-color 0.2s;
+            }
+            
+            .notification-item:hover {
+                background-color: #f8f9fa;
+            }
+            
+            .notification-item.unread {
+                background-color: #e8f4ff;
+            }
+            
+            .notification-item .gage-name {
+                font-weight: 600;
+                color: #333;
+            }
+            
+            .notification-item .due-date {
+                font-size: 0.9em;
+                color: #666;
+            }
+            
+            .notification-item .time {
+                font-size: 0.8em;
+                color: #999;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    const unreadCount = notifications.filter(n => !n.notification_read).length;
+    
+    notificationPanel.innerHTML = `
+        <div class="notification-header">
+            <span class="notification-title">Notifications</span>
+            ${unreadCount > 0 ? `<span class="notification-count">${unreadCount}</span>` : ''}
+        </div>
+        <ul class="notification-list">
+            ${notifications.map(notification => `
+                <li class="notification-item ${notification.notification_read ? '' : 'unread'}" 
+                    onclick="handleNotificationClick(${notification.calibration_id})">
+                    <div class="gage-name">${gageMap[notification.gage_id] || 'Unknown Gage'}</div>
+                    <div class="due-date">Due: ${formatDate(notification.next_due_date)}</div>
+                    <div class="time">Sent: ${formatDate(notification.notification_sent_date)}</div>
+                </li>
+            `).join('')}
+        </ul>
+    `;
+}
+
+// Add this function to handle notification clicks
+async function handleNotificationClick(calibrationId) {
+    try {
+        // Mark notification as read
+        await fetch(`http://127.0.0.1:5005/api/calibrations/${calibrationId}/mark-read`, {
+            method: 'POST'
+        });
+        
+        // Find the calibration details
+        const details = calibrationData.find(item => 
+            item.calibration_id === calibrationId || item.id === calibrationId
+        );
+        
+        if (details) {
+            // Show the calibration details
+            showEventDetails(details);
+            
+            // Refresh notifications
+            await loadNotifications();
+        }
+    } catch (error) {
+        console.error('Error handling notification click:', error);
+    }
 }

@@ -778,34 +778,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Update UI based on user role
     function updateUIForUserRole() {
         const adminControls = document.getElementById('adminControls');
-        const templateList = document.querySelector('.template-list');
-        const labelControls = document.getElementById('labelControls');
+        const savedTemplatesList = document.getElementById('savedTemplatesList');
         const templateManagement = document.getElementById('templateManagement');
-        
+
         if (currentUserRole === 'admin') {
             if (adminControls) adminControls.style.display = 'block';
-            if (templateList) {
-                templateList.style.pointerEvents = 'auto';
-                templateList.style.opacity = '1';
-            }
-            if (labelControls) {
-                labelControls.style.opacity = '1';
-                labelControls.style.pointerEvents = 'auto';
-            }
-            if (templateManagement) {
-                templateManagement.style.display = 'block';
-            }
+            if (savedTemplatesList) savedTemplatesList.style.display = 'none';
         } else {
-            // For non-admin users, only show saved templates
             if (adminControls) adminControls.style.display = 'none';
-            if (templateList) templateList.style.display = 'none';
-            if (labelControls) labelControls.style.display = 'none';
-            if (templateManagement) {
-                templateManagement.style.display = 'block';
-                templateManagement.style.marginTop = '0';
-                templateManagement.style.borderTop = 'none';
-                templateManagement.style.paddingTop = '0';
-            }
+            if (savedTemplatesList) savedTemplatesList.style.display = 'block';
+            // Show saved templates table for non-admin users
+            displaySavedTemplatesTable();
         }
     }
 
@@ -944,11 +927,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
 
                 if (response.ok) {
-                    showNotification('Template saved successfully!', 'success');
+                    // Show success dialog
+                    const successDialog = document.createElement('div');
+                    successDialog.className = 'success-dialog';
+                    successDialog.innerHTML = `
+                        <div class="dialog-content">
+                            <h3>Success!</h3>
+                            <p>Template "${templateName}" has been saved successfully.</p>
+                            <button class="btn-close-dialog">OK</button>
+                        </div>
+                    `;
+                    document.body.appendChild(successDialog);
+                    
+                    // Close button handler
+                    successDialog.querySelector('.btn-close-dialog').addEventListener('click', () => {
+                        document.body.removeChild(successDialog);
+                    });
+                    
+                    // Close after 3 seconds if not closed manually
+                    setTimeout(() => {
+                        if (document.body.contains(successDialog)) {
+                            document.body.removeChild(successDialog);
+                        }
+                    }, 3000);
+                    
                     document.body.removeChild(modal);
                     await loadSavedTemplates();
                 } else {
-                    throw new Error('Failed to save template');
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to save template');
                 }
             } catch (error) {
                 console.error('Error saving template:', error);
@@ -1037,106 +1044,172 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize when the page loads
     async function initializeLabelManager() {
-        try {
-            // Get token from localStorage
-            const token = localStorage.getItem('authToken');
-            console.log('Token found:', !!token);
+        await checkUserRole();
+        await fetchAndPopulateGages();
+        setInitialState();
+        // ... rest of the existing initialization code ...
+    }
 
+    // Add function to check user role
+    async function checkUserRole() {
+        try {
+            const response = await fetch('http://127.0.0.1:5005/api/users/me');
+            if (response.ok) {
+                const userData = await response.json();
+                currentUserRole = userData.role;
+                updateUIForUserRole();
+            }
+        } catch (error) {
+            console.error('Error checking user role:', error);
+        }
+    }
+
+    // Function to display saved templates table for non-admin users
+    async function displaySavedTemplatesTable() {
+        const savedTemplatesList = document.getElementById('savedTemplatesList');
+        if (!savedTemplatesList) return;
+
+        try {
+            const response = await fetch('http://127.0.0.1:5005/api/label-templates');
+            if (!response.ok) throw new Error('Failed to fetch templates');
+            
+            const templates = await response.json();
+            
+            // Create table HTML
+            const tableHTML = `
+                <table class="templates-table">
+                    <thead>
+                        <tr>
+                            <th>Template Name</th>
+                            <th>Created By</th>
+                            <th>Last Updated</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${templates.map(template => `
+                            <tr>
+                                <td>${template.template_name}</td>
+                                <td>${template.creator?.username || 'Unknown'}</td>
+                                <td>${new Date(template.updated_at).toLocaleDateString()}</td>
+                                <td>
+                                    <button class="action-btn btn-small" onclick="loadTemplate(${template.id})">Load</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            savedTemplatesList.innerHTML = tableHTML;
+        } catch (error) {
+            console.error('Error loading templates:', error);
+            savedTemplatesList.innerHTML = '<p class="error-message">Failed to load templates</p>';
+        }
+    }
+
+    // Print label function
+    async function printLabel(template) {
+        try {
+            const token = localStorage.getItem('authToken');
             if (!token) {
-                showNotification('Please log in to access the label manager', 'error');
+                showNotification('Please log in to print labels', 'error');
                 return;
             }
 
-            // Check user role with token
-            const response = await fetch('http://127.0.0.1:5005/api/auth/me', {
+            const response = await fetch(`http://127.0.0.1:5005/api/calibrations?gage_id=${template.gage_id}&limit=1&order_by=calibration_date desc`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (response.ok) {
+                const calibrations = await response.json();
+                if (calibrations && calibrations.length > 0) {
+                    const latestCalibration = calibrations[0];
+                    
+                    // Create a print window
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(`
+                        <html>
+                            <head>
+                                <title>Print Label</title>
+                                <style>
+                                    body {
+                                        margin: 0;
+                                        padding: 20px;
+                                        display: flex;
+                                        justify-content: center;
+                                        align-items: center;
+                                        min-height: 100vh;
+                                    }
+                                    .label-preview {
+                                        border: 1px solid #ccc;
+                                        padding: 10px;
+                                        text-align: center;
+                                        background-color: white;
+                                    }
+                                </style>
+                            </head>
+                            <body>
+                                <div class="label-preview">
+                                    <p>Equipment ID: ${template.gage_id}</p>
+                                    <p>Calibration Date: ${latestCalibration.calibration_date}</p>
+                                    <p>Next Due: ${latestCalibration.next_due_date}</p>
+                                    <p>Status: ${latestCalibration.calibration_result}</p>
+                                </div>
+                            </body>
+                        </html>
+                    `);
+                    printWindow.document.close();
+                    
+                    // Wait for content to load then print
+                    setTimeout(() => {
+                        printWindow.print();
+                    }, 500);
+                } else {
+                    showNotification('No calibration data found for this gage', 'error');
+                }
+            }
+        } catch (error) {
+            console.error('Error printing label:', error);
+            showNotification('Failed to print label', 'error');
+        }
+    }
+
+    // Delete template function (admin only)
+    async function deleteTemplate(templateId) {
+        if (currentUserRole !== 'admin') {
+            showNotification('Only administrators can delete templates', 'error');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to delete this template?')) return;
+
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                showNotification('Please log in to delete templates', 'error');
+                return;
+            }
+
+            const response = await fetch(`http://127.0.0.1:5005/api/label-templates/${templateId}`, {
+                method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
             });
 
-            console.log('Auth response status:', response.status);
-
             if (response.ok) {
-                const user = await response.json();
-                console.log('User data:', user);
-                currentUserRole = user.role;
-                
-                // Get all required elements
-                const labelTemplateSidebar = document.querySelector('.label-template-sidebar');
-                const labelSettingsPanel = document.querySelector('.label-settings-panel');
-                const labelActionBar = document.querySelector('.label-action-bar');
-                const adminControls = document.getElementById('adminControls');
-                const templateManagement = document.getElementById('templateManagement');
-
-                // Update UI based on role
-                if (currentUserRole === 'admin') {
-                    // Show admin interface
-                    if (labelTemplateSidebar) labelTemplateSidebar.style.display = 'block';
-                    if (labelSettingsPanel) labelSettingsPanel.style.display = 'block';
-                    if (labelActionBar) labelActionBar.style.display = 'flex';
-                    if (adminControls) adminControls.style.display = 'block';
-                    if (templateManagement) templateManagement.style.display = 'block';
-                } else {
-                    // Show user interface - only saved templates
-                    if (labelTemplateSidebar) labelTemplateSidebar.style.display = 'none';
-                    if (labelSettingsPanel) labelSettingsPanel.style.display = 'none';
-                    if (labelActionBar) labelActionBar.style.display = 'none';
-                    if (adminControls) adminControls.style.display = 'none';
-                    
-                    // Ensure template management is visible and centered for non-admins
-                    if (templateManagement) {
-                        templateManagement.style.display = 'block'; // Explicitly show
-                        templateManagement.style.width = '100%';
-                        templateManagement.style.maxWidth = '800px';
-                        templateManagement.style.margin = '20px auto';
-                    }
-                }
-                
-                // Wait for savedTemplatesList to be available before loading templates
-                const savedTemplatesList = await waitForElement('savedTemplatesList');
-                if (savedTemplatesList) {
-                   await loadSavedTemplates();
-                } else {
-                    console.error('savedTemplatesList element not available after waiting.');
-                    showNotification('Error loading templates: Required element not found.', 'error');
-                }
-
-            } else if (response.status === 401) {
-                localStorage.removeItem('authToken');
-                showNotification('Session expired. Please log in again.', 'error');
-                window.location.href = 'pages/login.html';
+                showNotification('Template deleted successfully', 'success');
+                await loadSavedTemplates();
             } else {
-                showNotification('Authentication failed. Please try again.', 'error');
+                throw new Error('Failed to delete template');
             }
         } catch (error) {
-            console.error('Error initializing label manager:', error);
-            showNotification('Error initializing label manager', 'error');
+            console.error('Error deleting template:', error);
+            showNotification('Failed to delete template', 'error');
         }
-    }
-
-    // Helper function to wait for an element to exist
-    function waitForElement(id, timeout = 5000) {
-        return new Promise((resolve, reject) => {
-            const element = document.getElementById(id);
-            if (element) {
-                return resolve(element);
-            }
-
-            const observer = new MutationObserver(() => {
-                const element = document.getElementById(id);
-                if (element) {
-                    observer.disconnect();
-                    resolve(element);
-                }
-            });
-
-            observer.observe(document.body, { childList: true, subtree: true });
-
-            setTimeout(() => {
-                observer.disconnect();
-                resolve(null); // Resolve with null if element not found within timeout
-            }, timeout);
-        });
     }
 
     // Load saved templates from backend
@@ -1309,110 +1382,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         savedTemplatesList.appendChild(table);
     }
 
-    // Print label function
-    async function printLabel(template) {
-        try {
-            const token = localStorage.getItem('authToken');
-            if (!token) {
-                showNotification('Please log in to print labels', 'error');
-                return;
-            }
-
-            const response = await fetch(`http://127.0.0.1:5005/api/calibrations?gage_id=${template.gage_id}&limit=1&order_by=calibration_date desc`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-            
-            if (response.ok) {
-                const calibrations = await response.json();
-                if (calibrations && calibrations.length > 0) {
-                    const latestCalibration = calibrations[0];
-                    
-                    // Create a print window
-                    const printWindow = window.open('', '_blank');
-                    printWindow.document.write(`
-                        <html>
-                            <head>
-                                <title>Print Label</title>
-                                <style>
-                                    body {
-                                        margin: 0;
-                                        padding: 20px;
-                                        display: flex;
-                                        justify-content: center;
-                                        align-items: center;
-                                        min-height: 100vh;
-                                    }
-                                    .label-preview {
-                                        border: 1px solid #ccc;
-                                        padding: 10px;
-                                        text-align: center;
-                                        background-color: white;
-                                    }
-                                </style>
-                            </head>
-                            <body>
-                                <div class="label-preview">
-                                    <p>Equipment ID: ${template.gage_id}</p>
-                                    <p>Calibration Date: ${latestCalibration.calibration_date}</p>
-                                    <p>Next Due: ${latestCalibration.next_due_date}</p>
-                                    <p>Status: ${latestCalibration.calibration_result}</p>
-                                </div>
-                            </body>
-                        </html>
-                    `);
-                    printWindow.document.close();
-                    
-                    // Wait for content to load then print
-                    setTimeout(() => {
-                        printWindow.print();
-                    }, 500);
-                } else {
-                    showNotification('No calibration data found for this gage', 'error');
-                }
-            }
-        } catch (error) {
-            console.error('Error printing label:', error);
-            showNotification('Failed to print label', 'error');
-        }
-    }
-
-    // Delete template function (admin only)
-    async function deleteTemplate(templateId) {
-        if (currentUserRole !== 'admin') {
-            showNotification('Only administrators can delete templates', 'error');
-            return;
-        }
-
-        if (!confirm('Are you sure you want to delete this template?')) return;
-
-        try {
-            const token = localStorage.getItem('authToken');
-            if (!token) {
-                showNotification('Please log in to delete templates', 'error');
-                return;
-            }
-
-            const response = await fetch(`http://127.0.0.1:5005/api/label-templates/${templateId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (response.ok) {
-                showNotification('Template deleted successfully', 'success');
-                await loadSavedTemplates();
-            } else {
-                throw new Error('Failed to delete template');
-            }
-        } catch (error) {
-            console.error('Error deleting template:', error);
-            showNotification('Failed to delete template', 'error');
-        }
-    }
-
     // Initialize the label manager
     initializeLabelManager();
+}); 
 }); 

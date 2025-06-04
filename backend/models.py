@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, create_engine, Text, JSON, Date, ForeignKey, Numeric
+from sqlalchemy import Column, Integer, String, DateTime, create_engine, Text, JSON, Date, ForeignKey, Numeric, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -84,6 +84,10 @@ class CalibrationRecord(Base):
     next_due_date = Column(Date)
     comments = Column(Text)
     calibration_document_path = Column(Text)
+    notification_sent = Column(Boolean, default=False)
+    notification_sent_date = Column(DateTime, nullable=True)
+    notification_read = Column(Boolean, default=False)
+    notification_read_date = Column(DateTime, nullable=True)
 
 # Add association table for Gage <-> Calibration Record if needed
 # Example: calibration_gage_link = Table('calibration_gage_link', Base.metadata, ...)

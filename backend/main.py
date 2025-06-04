@@ -8,6 +8,20 @@ from routers import calibration_measurements
 from routers import reports
 from database import init_db, init_async_db
 from config import get_settings
+import logging
+import sys
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('app.log')
+    ]
+)
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -38,9 +52,14 @@ app.include_router(reports.router, prefix="/api", tags=["Reports"])
 # Initialize database on startup
 @app.on_event("startup")
 async def startup_event():
-    # Initialize both sync and async databases
-    init_db()
-    await init_async_db()
+    try:
+        # Initialize both sync and async databases
+        init_db()
+        await init_async_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Error initializing database: {str(e)}")
+        raise
 
 @app.get("/")
 async def root():
