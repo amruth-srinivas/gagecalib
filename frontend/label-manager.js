@@ -13,50 +13,75 @@ document.addEventListener('DOMContentLoaded', async () => {
     const labelSettingsPanel = document.querySelector('.label-settings-panel');
     const labelActionBar = document.querySelector('.label-action-bar');
 
+    // ENSURE THESE ARE DECLARED AT THE TOP LEVEL OF DOMContentLoaded
+    const labelControls = document.querySelector('.label-controls');
+    const templateList = document.querySelector('.template-list');
+    const savedTemplatesList = document.getElementById('savedTemplatesList');
+
     let selectedGageId = null;
     let selectedTemplate = 'standard'; // Default template
-    let selectedLabelSize = '1x1'; // Default size
+    let selectedLabelSize = '2x2'; // Default size, matching HTML
     let latestCalibration = null;
     let uploadedLogo = null; // Store uploaded logo as DataURL
     let currentUserRole = 'user'; // Default to user role
 
     // Get Upload Logo and Print Preview buttons
     const uploadLogoBtn = document.getElementById('uploadLogoBtn');
-    const printPreviewBtn = document.querySelector('.action-btn[data-action="print-preview"]');
-    const exportJpegBtn = document.querySelector('.action-btn[data-action="export-jpeg"]');
+    const printPreviewBtn = document.getElementById('printPreviewBtn');
+    
+    // Create a hidden file input for logo upload if it doesn't exist in the DOM
+    let logoFileInput = document.getElementById('labelLogoInput');
+    if (!logoFileInput) {
+        logoFileInput = document.createElement('input');
+        logoFileInput.type = 'file';
+        logoFileInput.id = 'labelLogoInput';
+        logoFileInput.accept = 'image/*';
+        logoFileInput.style.display = 'none';
+        document.body.appendChild(logoFileInput);
+    }
 
-    // Create a hidden file input for logo upload
-    let logoFileInput = document.createElement('input');
-    logoFileInput.type = 'file';
-    logoFileInput.accept = 'image/*';
-    logoFileInput.style.display = 'none';
-    document.body.appendChild(logoFileInput);
+    // Add JsBarcode library (moved to label-manager.html for proper loading)
+    // const script = document.createElement('script');
+
+    // document.head.appendChild(script);
 
     // Initial state: only the gage select dropdown is fully visible/interactive.
     // Other sections are hidden or partially visible.
     function setInitialState() {
         // Reset form elements with null checks
         const labelSize = document.getElementById('labelSize');
-        const includeBarcode = document.getElementById('includeBarcode');
-        const showStatusColor = document.getElementById('showStatusColor');
+        
+        // Initialize modal close button
+        const closeModal = document.querySelector('.close-modal');
+        if (closeModal) {
+            closeModal.onclick = function() {
+                document.getElementById('printPreviewModal').style.display = 'none';
+            };
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('printPreviewModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        };
+
         const smallFontBtn = document.querySelector('.font-size-btn[data-size="small"]');
         const otherFontBtns = document.querySelectorAll('.font-size-btn:not([data-size="small"])');
         const labelPreview = document.getElementById('labelPreview');
         const initialMessage = document.getElementById('initialSelectionMessage');
-        const labelControls = document.querySelector('.label-controls');
-        const templateList = document.querySelector('.template-list');
-        const standardTemplate = document.querySelector('.template-item[data-template="standard"]');
 
         // Set default template
-        if (standardTemplate) {
-            standardTemplate.classList.add('active');
+        if (templateList && document.querySelector('.template-item[data-template="standard"]')) { 
+            document.querySelector('.template-item[data-template="standard"]').classList.add('active');
             selectedTemplate = 'standard';
         }
 
-        // Reset form values if elements exist
+        // Reset label size dropdown to default
         if (labelSize) labelSize.value = '2x2';
-        if (includeBarcode) includeBarcode.checked = false;
-        if (showStatusColor) showStatusColor.checked = false;
+
+        // Checkbox states should persist unless explicitly reset by user interaction, so we don't reset them here.
 
         // Reset font size buttons if they exist
         if (smallFontBtn) smallFontBtn.classList.add('active');
@@ -149,31 +174,46 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Add this function after the existing functions but before the event listeners
     function calculateDynamicFontSize(containerWidth, containerHeight, textLength) {
-        // Base font sizes for different label sizes
+        // Base font sizes for different label sizes (adjusted for better fitting)
         const baseSizes = {
-            '2x2': { min: 8, max: 24 },
-            '3x2': { min: 10, max: 28 },
-            '1x1': { min: 6, max: 16 },
-            '4x2': { min: 12, max: 32 },
-            '4x6': { min: 14, max: 36 },
-            '2x0.5': { min: 6, max: 14 },
-            '3x1': { min: 8, max: 20 },
-            '2x4': { min: 10, max: 24 },
-            'custom': { min: 8, max: 24 }
+            '2x2': { min: 4, max: 12 }, 
+            '3x2': { min: 6, max: 14 },
+            '1x1': { min: 2, max: 5 }, // Very aggressive for 1x1
+            '4x2': { min: 8, max: 18 },
+            '4x6': { min: 10, max: 22 },
+            '2x0.5': { min: 1, max: 4 }, // EXTREMELY aggressive for 2x0.5 - may be unreadable
+            '3x1': { min: 3, max: 7 },
+            '2x4': { min: 5, max: 12 },
+            'custom': { min: 4, max: 12 }
         };
 
-        // Get the base size range for the current label size
         const sizeRange = baseSizes[selectedLabelSize] || baseSizes['custom'];
         
-        // Calculate available space (considering padding and margins)
-        const availableWidth = containerWidth * 0.9; // 90% of container width
-        const availableHeight = containerHeight * 0.9; // 90% of container height
-        
-        // Calculate initial font size based on container dimensions
-        let fontSize = Math.min(
-            availableWidth / (textLength * 0.6), // Width-based calculation
-            availableHeight / 2 // Height-based calculation
-        );
+        const availableWidth = containerWidth * 0.98; // Use almost full width
+        const availableHeight = containerHeight * 0.98; // Use almost full height
+
+        // Determine the number of visible content elements to distribute vertical space
+        let visibleContentElements = 3; // Equipment ID, Cal, Due are always there
+        if (document.getElementById('includeBarcode').checked) {
+            visibleContentElements++; // Add 1 for barcode
+        }
+        visibleContentElements++; // Add 1 for logo area (always present or placeholder)
+        if (document.getElementById('showStatusColor').checked && latestCalibration && latestCalibration.calibration_result) {
+            visibleContentElements++; // Add 1 for status text
+        }
+
+        // Calculate target height for each *main* element to fit, ensuring some minimum space
+        const effectiveVerticalItems = Math.max(1, visibleContentElements); // Ensure not dividing by zero
+        const targetSpacePerItem = availableHeight / effectiveVerticalItems; 
+
+        // Font size primarily based on target element height for vertical fit
+        let fontSize = targetSpacePerItem * 0.55; // Adjusted heuristic for font height - more generous
+
+        // Also consider width for very long text, prioritizing fitting horizontally
+        if (textLength > 0) {
+            const fontSizeByWidth = availableWidth / (textLength * 0.35); // Even more aggressive character width ratio
+            fontSize = Math.min(fontSize, fontSizeByWidth);
+        }
         
         // Clamp the font size within the allowed range
         fontSize = Math.max(sizeRange.min, Math.min(sizeRange.max, fontSize));
@@ -182,8 +222,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Update the renderLabelPreview function
-    function renderLabelPreview() {
-        console.log('Rendering label preview...', { selectedGageId, selectedTemplate, latestCalibration });
+    function renderLabelPreview(labelWidth, labelHeight) {
+        console.log('Rendering label preview...', { selectedGageId, selectedTemplate, latestCalibration, labelWidth, labelHeight });
         if (!labelPreviewDiv) return;
 
             labelPreviewDiv.innerHTML = ''; // Clear previous content
@@ -206,7 +246,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const noCalMessage = document.createElement('p');
             noCalMessage.textContent = 'No calibration data found for this gage.';
             noCalMessage.style.color = 'orange';
-            noCalMessage.style.fontSize = '1.2rem'; // Adjust size as needed
+            noCalMessage.style.fontSize = `${labelHeight * 0.1}px`; // Dynamic font size for message
             noCalMessage.style.textAlign = 'center';
             labelPreviewDiv.appendChild(noCalMessage);
             labelPreviewDiv.style.border = '1px dashed #ccc';
@@ -214,25 +254,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // Get container dimensions for dynamic sizing
-            const containerWidth = labelPreviewDiv.clientWidth;
-            const containerHeight = labelPreviewDiv.clientHeight;
+        // Use passed dimensions for dynamic sizing
+        const containerWidth = labelWidth;
+        const containerHeight = labelHeight;
 
         // Use a flex column layout for stacking elements
         labelPreviewDiv.style.flexDirection = 'column';
-        labelPreviewDiv.style.justifyContent = 'center';
+        labelPreviewDiv.style.justifyContent = 'space-between'; // Distribute space evenly
         labelPreviewDiv.style.alignItems = 'center';
-        labelPreviewDiv.style.padding = '10px'; // Add some padding
+        labelPreviewDiv.style.padding = '0.5%'; // MINIMAL percentage padding for max content space
+
+        // Calculate base font size for the entire label content
+        const baseFontSize = calculateDynamicFontSize(
+            containerWidth,
+            containerHeight,
+            // Use a combination of relevant text lengths for a better estimate
+            (selectedGageId ? selectedGageId.length : 0) + 
+            (document.getElementById('selectGage').options[document.getElementById('selectGage').selectedIndex].textContent.split(' - ')[1] || '').length + 
+            (latestCalibration.calibration_date ? latestCalibration.calibration_date.length : 0) + 
+            (latestCalibration.next_due_date ? latestCalibration.next_due_date.length : 0) 
+        );
 
         // Function to create text elements with basic styling
         const createTextElement = (text, className = '') => {
             const p = document.createElement('p');
             p.textContent = text;
-            p.style.margin = '3px 0'; // Adjust spacing
+            p.style.margin = '0.1% 0'; // Minimal percentage margin
             p.style.padding = '0';
             p.style.textAlign = 'center';
             p.style.width = '100%'; // Occupy full width
             if (className) p.classList.add(className);
+            // Apply dynamic font size based on baseFontSize
+            p.style.fontSize = `${baseFontSize}px`;
+            p.style.lineHeight = '1em'; // Even tighter line height
+            p.style.wordWrap = 'break-word'; // Ensure long words break
+            p.style.whiteSpace = 'normal'; // Ensure text wraps normally
+            p.style.flexShrink = '0'; // Prevent text from shrinking too much
             return p;
         };
 
@@ -244,158 +301,346 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Add text details
             labelPreviewDiv.appendChild(createTextElement(`Equipment ID: ${selectedGageId}${gageName ? ' (' + gageName + ')' : ''}`));
-            labelPreviewDiv.appendChild(createTextElement(`Cal: ${latestCalibration.calibration_date}`));
-            labelPreviewDiv.appendChild(createTextElement(`Due: ${latestCalibration.next_due_date}`));
 
-            // Add Logo/Placeholder
-            if (uploadedLogo) {
-                const logoImg = document.createElement('img');
-                logoImg.src = uploadedLogo;
-                logoImg.alt = 'Logo';
-                 // Basic styling, adjust size dynamically if needed
-                logoImg.style.cssText = `
-                    max-width: 80%;
-                    max-height: 30%;
-                    object-fit: contain;
-                    margin: 10px auto; // Center the image and add vertical margin
-                `;
-                labelPreviewDiv.appendChild(logoImg);
-            } else {
-                 // Placeholder if no logo uploaded
-                const logoPlaceholder = document.createElement('div');
-                logoPlaceholder.textContent = 'Logo Area';
-                logoPlaceholder.style.cssText = `
-                    width: 80%;
-                    height: 30%;
-                    background-color: #e0e0e0;
-                    color: #555;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    margin: 10px auto;
-                    font-size: 1rem;
-                    border-radius: 5px;
-                `;
-                labelPreviewDiv.appendChild(logoPlaceholder);
-            }
+            // Add Status with color (re-implemented and checked for consistency)
+            const showStatusColorCheckbox = document.getElementById('showStatusColor');
+            console.log('DEBUG renderLabelPreview: showStatusColorCheckbox.checked =', showStatusColorCheckbox ? showStatusColorCheckbox.checked : 'element not found');
 
-            // Add Status with color
-            if (document.getElementById('showStatusColor').checked && latestCalibration.calibration_result) {
+            if (showStatusColorCheckbox && showStatusColorCheckbox.checked && latestCalibration.calibration_result) {
                 const statusText = `Status: ${latestCalibration.calibration_result.toUpperCase()}`;
-                const statusEl = createTextElement(statusText);
-                statusEl.style.fontWeight = 'bold'; // Make status text bold
+                const statusEl = createTextElement(statusText, 'status-text');
+                statusEl.style.fontWeight = 'bold';
 
-                // Set status color
                 if (latestCalibration.calibration_result.toLowerCase() === 'pass') {
                     statusEl.style.color = 'green';
                 } else if (latestCalibration.calibration_result.toLowerCase() === 'fail') {
                     statusEl.style.color = 'red';
                 } else {
-                    statusEl.style.color = '#333'; // Default color for other statuses
+                    statusEl.style.color = '#333'; // Default color
                 }
                 labelPreviewDiv.appendChild(statusEl);
             }
 
-            // TODO: Add barcode rendering logic if includeBarcode is checked
-            if (document.getElementById('includeBarcode').checked) {
-                 // Placeholder for barcode
+            // Add barcode if enabled
+            const includeBarcodeCheckbox = document.getElementById('includeBarcode');
+            console.log('DEBUG renderLabelPreview: includeBarcodeCheckbox.checked =', includeBarcodeCheckbox ? includeBarcodeCheckbox.checked : 'element not found');
+
+            if (includeBarcodeCheckbox && includeBarcodeCheckbox.checked && selectedGageId) {
+                const barcodeContainer = document.createElement('div');
+                barcodeContainer.classList.add('barcode-container');
+                barcodeContainer.style.width = '100%';
+                barcodeContainer.style.margin = '10px 0';
+                barcodeContainer.style.textAlign = 'center';
+                barcodeContainer.style.overflow = 'hidden';
+                barcodeContainer.style.flexShrink = '0';
+                barcodeContainer.style.minHeight = '80px';
+                barcodeContainer.style.maxHeight = '200px';
+                barcodeContainer.style.display = 'flex';
+                barcodeContainer.style.justifyContent = 'center';
+                barcodeContainer.style.alignItems = 'center';
+
+                const qrCodeContainer = document.createElement('div');
+                qrCodeContainer.id = 'qrCodeContainer';
+                qrCodeContainer.style.width = '100%';
+                qrCodeContainer.style.height = '100%';
+                barcodeContainer.appendChild(qrCodeContainer);
+                labelPreviewDiv.appendChild(barcodeContainer);
+
+                // Generate QR code with a URL
+                try {
+                    const calibrationUrl = `http://127.0.0.1:5005/api/calibrations?gage_id=${selectedGageId}`;
+                    console.log('Generating QR code for URL:', calibrationUrl);
+
+                    // Get QR code size from template data or use default
+                    const qrCodeSize = (selectedTemplate && selectedTemplate.qrCodeSize) || 100;
+                    
+                    // Create QR code instance with error correction level 'M' (15% error correction)
+                    const qr = qrcode(0, 'M');
+                    qr.addData(calibrationUrl);
+                    qr.make();
+                    
+                    // Clear previous QR code
+                    qrCodeContainer.innerHTML = '';
+                    
+                    // Set container size based on the QR code size
+                    qrCodeContainer.style.width = `${qrCodeSize}px`;
+                    qrCodeContainer.style.height = `${qrCodeSize}px`;
+                    
+                    // Create QR code as SVG for better quality
+                    const qrSvg = qr.createSvgTag({
+                        cellSize: 0, // Auto-calculate based on size
+                        margin: 1,
+                        scalable: true
+                    });
+                    
+                    // Set SVG size and viewBox for responsiveness
+                    const svgDoc = new DOMParser().parseFromString(qrSvg, 'image/svg+xml');
+                    const svgElement = svgDoc.documentElement;
+                    svgElement.setAttribute('width', '100%');
+                    svgElement.setAttribute('height', '100%');
+                    svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                    
+                    // Add the QR code to the container
+                    qrCodeContainer.appendChild(document.importNode(svgElement, true));
+
+                } catch (error) {
+                    console.error('Error generating QR code:', error);
+                    const errorMessage = document.createElement('p');
+                    errorMessage.textContent = 'Failed to generate QR code: ' + error.message;
+                    errorMessage.style.color = 'red';
+                    errorMessage.style.fontSize = '10px';
+                    barcodeContainer.appendChild(errorMessage);
+                }
+            }
+
+            labelPreviewDiv.appendChild(createTextElement(`Cal: ${latestCalibration.calibration_date}`));
+            labelPreviewDiv.appendChild(createTextElement(`Due: ${latestCalibration.next_due_date}`));
+
+            // Add Logo/Placeholder
+            const logoContainer = document.createElement('div');
+            logoContainer.classList.add('logo-area');
+            logoContainer.style.flexShrink = '0'; // Prevent shrinking below content
+            logoContainer.style.flexGrow = '0'; // Prevent growing beyond content
+            logoContainer.style.minHeight = '10px'; // Minimum height for placeholder (adjusted)
+            logoContainer.style.maxHeight = `${labelHeight * 0.10}px`; // Max height for logo container (adjusted for more space)
+            logoContainer.style.margin = '0.1% 0'; // Consistent minimal margin
+            logoContainer.style.display = 'flex'; // Use flex for internal centering
+            logoContainer.style.justifyContent = 'center';
+            logoContainer.style.alignItems = 'center';
+            if (uploadedLogo) {
+                const logoImg = document.createElement('img');
+                logoImg.src = uploadedLogo;
+                logoImg.style.maxWidth = '100%';
+                logoImg.style.maxHeight = `100%`; // Fill logo container height
+                logoImg.style.objectFit = 'contain';
+                logoImg.style.display = 'block'; // Ensure it behaves as a block element for sizing
+                logoContainer.appendChild(logoImg);
+            } else {
+                const logoPlaceholder = document.createElement('span');
+                logoPlaceholder.textContent = 'Logo Area';
+                logoPlaceholder.style.fontSize = `${baseFontSize * 0.7}px`; // Scale placeholder text (adjusted)
+                logoContainer.appendChild(logoPlaceholder);
+            }
+            labelPreviewDiv.appendChild(logoContainer);
+
+            // Remove Barcode Area Placeholder (if barcode is included, otherwise add it)
+            const existingBarcodePlaceholder = labelPreviewDiv.querySelector('.barcode-area');
+            if (existingBarcodePlaceholder) {
+                existingBarcodePlaceholder.remove();
+            }
+            // Re-add barcode placeholder ONLY if barcode is NOT included
+            if (includeBarcodeCheckbox && !includeBarcodeCheckbox.checked) {
                  const barcodePlaceholder = document.createElement('div');
+                barcodePlaceholder.classList.add('barcode-area');
                  barcodePlaceholder.textContent = 'Barcode Area';
-                  barcodePlaceholder.style.cssText = `
-                    width: 80%;
-                    height: 15%;
-                    background-color: #e0e0e0;
-                    color: #555;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    margin: 10px auto;
-                    font-size: 1rem;
-                    border-radius: 5px;
-                `;
+                barcodePlaceholder.style.fontSize = `${baseFontSize * 0.7}px`; // Scale placeholder text (adjusted)
                  labelPreviewDiv.appendChild(barcodePlaceholder);
             }
 
-        } else {
-            // Handle other templates or a generic preview if needed
-            labelPreviewDiv.appendChild(createTextElement(`Preview for ${selectedTemplate} template for Gage ID: ${selectedGageId}`));
-            // You might add more specific rendering logic here for other templates
+        } else if (selectedTemplate === 'external') {
+            // External Vendor Label content
+            labelPreviewDiv.appendChild(createTextElement(`Vendor ID: ${selectedGageId}`));
+            labelPreviewDiv.appendChild(createTextElement(`Description: ${latestCalibration.description || 'N/A'}`));
+            labelPreviewDiv.appendChild(createTextElement(`Last Calibrated: ${latestCalibration.calibration_date}`));
+
+        } else if (selectedTemplate === 'compact') {
+            // Compact Label content
+            labelPreviewDiv.appendChild(createTextElement(`${selectedGageId}`));
+            labelPreviewDiv.appendChild(createTextElement(`Cal: ${latestCalibration.calibration_date}`));
+            labelPreviewDiv.appendChild(createTextElement(`Due: ${latestCalibration.next_due_date}`));
         }
     }
 
     // Update preview size based on selection
     function updatePreviewSize() {
-         console.log('Updating preview size to:', selectedLabelSize);
-        if (labelPreviewDiv) {
-            // Map size values to actual dimensions (example dimensions)
-            const sizes = {
-                '2x2': { width: '200px', height: '200px' },
-                '3x2': { width: '300px', height: '200px' },
-                '1x1': { width: '100px', height: '100px' },
-                '4x2': { width: '400px', height: '200px' },
-                '4x6': { width: '400px', height: '600px' },
-                '2x0.5': { width: '200px', height: '50px' },
-                '3x1': { width: '300px', height: '100px' },
-                '2x4': { width: '200px', height: '400px' },
-                'custom': { width: '250px', height: '150px' },
-            };
-            const size = sizes[selectedLabelSize] || sizes['1x1']; // Default to 1x1 if size not found
-            labelPreviewDiv.style.width = size.width;
-            labelPreviewDiv.style.height = size.height;
-            labelPreviewDiv.style.border = selectedGageId ? '1px dashed #ccc' : 'none';
+        if (!labelPreviewDiv) return;
 
-            // Adjust font sizes based on label size
-            const fontSizeMap = {
-                '2x2': { small: '12px', medium: '14px', large: '16px' },
-                '3x2': { small: '14px', medium: '16px', large: '18px' },
-                '1x1': { small: '8px', medium: '10px', large: '12px' },
-                '4x2': { small: '16px', medium: '18px', large: '20px' },
-                '4x6': { small: '18px', medium: '20px', large: '24px' },
-                '2x0.5': { small: '8px', medium: '10px', large: '12px' },
-                '3x1': { small: '10px', medium: '12px', large: '14px' },
-                '2x4': { small: '12px', medium: '14px', large: '16px' },
-                'custom': { small: '12px', medium: '14px', large: '16px' },
-            };
+        const sizeMap = {
+            '2x2': { width: 200, height: 200 },
+            '3x2': { width: 300, height: 200 },
+            '1x1': { width: 100, height: 100 },
+            '4x2': { width: 400, height: 200 },
+            '4x6': { width: 400, height: 600 },
+            '2x0.5': { width: 200, height: 50 },
+            '3x1': { width: 300, height: 100 },
+            '2x4': { width: 200, height: 400 },
+            'custom': { width: 250, height: 150 }
+        };
 
-            const fontSizes = fontSizeMap[selectedLabelSize] || fontSizeMap['custom'];
-            const activeSize = document.querySelector('.font-size-btn.active').dataset.size;
-            const fontSize = fontSizes[activeSize];
+        const dimensions = sizeMap[selectedLabelSize] || sizeMap['custom'];
 
-            // Update all text elements in the preview
-            const textElements = labelPreviewDiv.querySelectorAll('p');
-            textElements.forEach(element => {
-                element.style.fontSize = fontSize;
-                element.style.lineHeight = '1.2';
-                element.style.margin = '2px 0';
-            });
+        labelPreviewDiv.style.width = `${dimensions.width}px`;
+        labelPreviewDiv.style.height = `${dimensions.height}px`;
 
-            // Adjust logo size
-            const logoImg = labelPreviewDiv.querySelector('img');
-            if (logoImg) {
-                const logoSize = Math.min(parseInt(size.width) * 0.3, parseInt(size.height) * 0.3);
-                logoImg.style.maxWidth = `${logoSize}px`;
-                logoImg.style.maxHeight = `${logoSize}px`;
-            }
-        }
-        // Re-render preview to adjust content layout
-         renderLabelPreview();
+        // Pass the new dimensions directly to renderLabelPreview
+        renderLabelPreview(dimensions.width, dimensions.height);
     }
 
     // Event Listeners
+
+    // Save Template button
+    const saveTemplateBtn = document.getElementById('saveTemplateBtn');
+    if (saveTemplateBtn) {
+        saveTemplateBtn.addEventListener('click', async () => {
+            if (!selectedGageId) {
+                alert('Please select a gage first');
+                return;
+            }
+
+            try {
+                // Calculate QR code size based on label size
+                const qrSizeMap = {
+                    '1x1': 80,
+                    '1.5x1': 100,
+                    '2x1': 120,
+                    '2x2': 150
+                };
+                const qrSize = qrSizeMap[selectedLabelSize] || 100;
+
+                const response = await fetch('http://127.0.0.1:5005/api/label-templates/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        gageId: selectedGageId,
+                        template: selectedTemplate,
+                        labelSize: selectedLabelSize,
+includeBarcode: document.getElementById('includeBarcode')?.checked || false,
+                        showStatusColor: document.getElementById('showStatusColor')?.checked || false,
+                        logo: uploadedLogo,
+                        qrCodeSize: qrSize
+                    })
+                });
+
+                if (response.ok) {
+                    alert('Template saved successfully!');
+                } else {
+                    throw new Error('Failed to save template');
+                }
+            } catch (error) {
+                console.error('Error saving template:', error);
+                alert('Failed to save template. Please try again.');
+            }
+        });
+    }
+
+    // Initialize Print Preview button if it exists
+    if (printPreviewBtn) {
+        printPreviewBtn.addEventListener('click', () => {
+            const modal = document.getElementById('printPreviewModal');
+            if (modal) {
+                modal.style.display = 'block';
+            }
+        });
+    }
+
+    // Close Preview button
+    const closePreviewBtn = document.getElementById('closePreviewBtn');
+    if (closePreviewBtn) {
+        closePreviewBtn.addEventListener('click', () => {
+            const modal = document.getElementById('printPreviewModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        });
+    }
+
+    // Export as PNG
+    const exportPngBtn = document.getElementById('exportPngBtn');
+    if (exportPngBtn) {
+        exportPngBtn.addEventListener('click', async () => {
+            try {
+                const imageData = await convertLabelToImage('png');
+                downloadLabelImage(imageData, 'png');
+            } catch (error) {
+                console.error('Error exporting as PNG:', error);
+                alert('Failed to export as PNG');
+            }
+        });
+    }
+
+    // Export as JPG
+    const exportJpgBtn = document.getElementById('exportJpgBtn');
+    if (exportJpgBtn) {
+        exportJpgBtn.addEventListener('click', async () => {
+            try {
+                const imageData = await convertLabelToImage('jpeg');
+                downloadLabelImage(imageData, 'jpeg');
+            } catch (error) {
+                console.error('Error exporting as JPG:', error);
+                alert('Failed to export as JPG');
+            }
+        });
+    }
+
+    // Print directly
+    const printBtn = document.getElementById('printBtn');
+    if (printBtn) {
+        printBtn.addEventListener('click', () => {
+            window.print();
+        });
+    }
+
+    // Initialize Upload Logo button if it exists
+    if (uploadLogoBtn && logoFileInput) {
+        uploadLogoBtn.addEventListener('click', () => {
+            logoFileInput.click();
+        });
+
+        logoFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                uploadedLogo = event.target.result;
+                // Update the preview
+                const logoPreview = document.createElement('img');
+                logoPreview.src = uploadedLogo;
+                logoPreview.className = 'logo-preview';
+                
+                // Remove existing logo preview if any
+                const existingPreview = labelPreviewDiv.querySelector('.logo-preview');
+                if (existingPreview) {
+                    existingPreview.remove();
+                }
+                
+                // Add new logo to preview
+                if (labelPreviewDiv.firstChild) {
+                    labelPreviewDiv.insertBefore(logoPreview, labelPreviewDiv.firstChild);
+                } else {
+                    labelPreviewDiv.appendChild(logoPreview);
+                }
+                
+                // Re-render the label to include the logo
+                renderLabelPreview();
+            };
+            reader.readAsDataURL(file);
+        });
+    }
 
     // Gage selection listener
     if (selectGageElement) {
         selectGageElement.addEventListener('change', async (event) => {
             selectedGageId = event.target.value;
-            console.log('Gage selected:', selectedGageId);
-            latestCalibration = null; // Clear previous calibration data
+            // Enable controls and template list only if a gage is selected
             if (selectedGageId) {
+                console.log('DEBUG Gage Select: labelControls =', labelControls); // Debug log
+                if (labelControls) { 
+                    labelControls.style.opacity = '1';
+                    labelControls.style.pointerEvents = 'auto';
+                }
+                console.log('DEBUG Gage Select: templateList =', templateList); // Debug log
+                if (templateList) {
+                    templateList.style.opacity = '1';
+                    templateList.style.pointerEvents = 'auto';
+                }
                 latestCalibration = await fetchLatestCalibration(selectedGageId);
-                console.log('Latest calibration for selected gage:', latestCalibration);
+            } else {
+                setInitialState(); // Reset if no gage selected
             }
-             // After fetching calibration, update section visibility and render preview
-             updateSectionVisibility();
-             renderLabelPreview(); // Always attempt to render/update message
+            updatePreviewSize(); // Always render/update preview based on selection
         });
     }
 
@@ -412,15 +657,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('Template selected:', selectedTemplate);
             // Update section visibility and render preview
              updateSectionVisibility();
-             renderLabelPreview();
+             renderLabelPreview(labelPreviewDiv.clientWidth, labelPreviewDiv.clientHeight);
         });
     });
 
     // Label size selection listener
     if (labelSizeSelect) {
         labelSizeSelect.addEventListener('change', (event) => {
-            selectedLabelSize = event.target.value;
-            updatePreviewSize(); // Update the size of the preview area
+            selectedLabelSize = event.target.value; // Ensure this is updated
+            updatePreviewSize();
         });
     }
 
@@ -430,7 +675,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('Show Status Color checkbox changed. Checked:', showStatusColorCheckbox.checked);
             // Only re-render if a gage and template are already selected
             if (selectedGageId && selectedTemplate) {
-                renderLabelPreview(); // Re-render to show/hide status
+                renderLabelPreview(labelPreviewDiv.clientWidth, labelPreviewDiv.clientHeight); // Re-render to show/hide status
             }
         });
     }
@@ -447,7 +692,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 uploadedLogo = e.target.result;
-                renderLabelPreview();
+                renderLabelPreview(labelPreviewDiv.clientWidth, labelPreviewDiv.clientHeight);
             };
             reader.readAsDataURL(file);
         }
@@ -1038,6 +1283,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             fontSizeBtn.classList.add('active');
         }
 
+        // Set QR code size if available
+        if (template.template_data.qrCodeSize) {
+            selectedTemplate = {
+                ...selectedTemplate,
+                qrCodeSize: template.template_data.qrCodeSize
+            };
+        }
+
         // Update preview
         updateLabelPreview();
     }
@@ -1245,144 +1498,198 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Display saved templates in a table format
     function displaySavedTemplates(templates) {
-        // Get savedTemplatesList inside this function to ensure it's available
-        const savedTemplatesList = document.getElementById('savedTemplatesList');
-        if (!savedTemplatesList) {
-            console.error('savedTemplatesList element not found in displaySavedTemplates');
+        // savedTemplatesList is now globally defined within DOMContentLoaded
+        console.log('DEBUG displaySavedTemplates: savedTemplatesList =', savedTemplatesList); // Debug log
+        if (savedTemplatesList) {
+            savedTemplatesList.innerHTML = '';
+            if (templates.length === 0) {
+                savedTemplatesList.innerHTML = '<p>No saved templates yet.</p>';
             return;
-        }
-
-        savedTemplatesList.innerHTML = '';
-
-        if (!templates || templates.length === 0) {
-            const noTemplates = document.createElement('p');
-            noTemplates.textContent = 'No saved templates found.';
-            noTemplates.style.color = '#666';
-            savedTemplatesList.appendChild(noTemplates);
-            return;
-        }
-
-        // Create table
-        const table = document.createElement('table');
-        table.style.cssText = `
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-            background-color: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        `;
-
-        // Add header row
-        const thead = document.createElement('thead');
-        const headerRow = document.createElement('tr');
-        const headers = ['Gage ID', 'Template Name', 'Last Updated', 'Actions'];
-        headers.forEach(headerText => {
-            const th = document.createElement('th');
-            th.textContent = headerText;
-            th.style.cssText = `
-                padding: 12px 15px;
-                text-align: left;
-                border-bottom: 2px solid #ddd;
-                background-color: #f8f9fa;
-                font-weight: 600;
-                color: #333;
-            `;
-            headerRow.appendChild(th);
-        });
-        thead.appendChild(headerRow);
-        table.appendChild(thead);
-
-        // Add template rows
-        const tbody = document.createElement('tbody');
-        templates.forEach(template => {
-            const row = document.createElement('tr');
-            row.style.cssText = `
-                border-bottom: 1px solid #eee;
-                transition: background-color 0.2s;
-            `;
-            row.onmouseover = () => row.style.backgroundColor = '#f8f9fa';
-            row.onmouseout = () => row.style.backgroundColor = 'white';
-
-            // Gage ID cell
-            const gageCell = document.createElement('td');
-            gageCell.textContent = template.gage_id;
-            gageCell.style.padding = '12px 15px';
-            row.appendChild(gageCell);
-
-            // Template Name cell
-            const nameCell = document.createElement('td');
-            nameCell.textContent = template.template_name;
-            nameCell.style.padding = '12px 15px';
-            row.appendChild(nameCell);
-
-            // Last Updated cell
-            const dateCell = document.createElement('td');
-            dateCell.textContent = new Date(template.updated_at).toLocaleDateString();
-            dateCell.style.padding = '12px 15px';
-            row.appendChild(dateCell);
-
-            // Actions cell
-            const actionsCell = document.createElement('td');
-            actionsCell.style.padding = '12px 15px';
-
-            // Print button
-            const printBtn = document.createElement('button');
-            printBtn.textContent = 'Print Label';
-            printBtn.className = 'action-btn';
-            printBtn.style.cssText = `
-                padding: 6px 12px;
-                border-radius: 4px;
-                border: 1px solid #007bff;
-                background-color: white;
-                color: #007bff;
-                cursor: pointer;
-                transition: all 0.2s;
-            `;
-            printBtn.onmouseover = () => {
-                printBtn.style.backgroundColor = '#007bff';
-                printBtn.style.color = 'white';
-            };
-            printBtn.onmouseout = () => {
-                printBtn.style.backgroundColor = 'white';
-                printBtn.style.color = '#007bff';
-            };
-            printBtn.onclick = () => printLabel(template);
-            actionsCell.appendChild(printBtn);
-
-            // Add delete button for admin users
-            if (currentUserRole === 'admin') {
-                const deleteBtn = document.createElement('button');
-                deleteBtn.innerHTML = '&times;';
-                deleteBtn.className = 'delete-template-btn';
-                deleteBtn.style.cssText = `
-                    margin-left: 8px;
-                    background: none;
-                    border: none;
-                    color: #dc3545;
-                    font-size: 18px;
-                    cursor: pointer;
-                    padding: 0 5px;
-                    opacity: 0.7;
-                    transition: opacity 0.2s;
-                `;
-                deleteBtn.onmouseover = () => deleteBtn.style.opacity = '1';
-                deleteBtn.onmouseout = () => deleteBtn.style.opacity = '0.7';
-                deleteBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    deleteTemplate(template.id);
-                };
-                actionsCell.appendChild(deleteBtn);
             }
-
-            row.appendChild(actionsCell);
-            tbody.appendChild(row);
-        });
-
-        table.appendChild(tbody);
-        savedTemplatesList.appendChild(table);
+            // ... rest of the existing function ...
+        } else {
+            console.error('savedTemplatesList element not found in displaySavedTemplates (Fallback error)');
+        }
     }
 
-    // Initialize the label manager
+    // Add event listener for barcode checkbox
+    const includeBarcodeCheckbox = document.getElementById('includeBarcode');
+    if (includeBarcodeCheckbox) {
+        includeBarcodeCheckbox.addEventListener('change', renderLabelPreview);
+    }
+
+    // Ensure initial preview is rendered with default size
+    updatePreviewSize();
+    fetchAndPopulateGages();
     initializeLabelManager();
-}); 
+    checkUserRole();
+    loadSavedTemplates();
+
+    // Print Label Functionality
+    window.printLabel = async () => {
+        if (!selectedGageId || !selectedTemplate) {
+            showNotification('Please select a gage and a template first.', 'warning');
+            return;
+        }
+
+        try {
+            // Ensure html2canvas is available
+            if (typeof html2canvas === 'undefined') {
+                throw new Error('html2canvas library not loaded');
+            }
+
+            // Temporarily adjust preview for printing
+            labelPreviewDiv.style.border = 'none';
+
+            // Get current dimensions
+            const currentComputedStyle = window.getComputedStyle(labelPreviewDiv);
+            const currentWidth = parseFloat(currentComputedStyle.width);
+            const currentHeight = parseFloat(currentComputedStyle.height);
+
+            // Re-render the label preview
+            renderLabelPreview(currentWidth, currentHeight);
+
+            // Wait a moment for the re-render to complete
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            const canvas = await html2canvas(labelPreviewDiv, {
+                scale: 3,
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const printWindow = window.open('', '_blank');
+            
+            if (!printWindow) {
+                throw new Error('Popup blocked. Please allow popups for this site.');
+            }
+
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Print Label</title>
+                    <style>
+                        body { 
+                            font-family: sans-serif; 
+                            text-align: center; 
+                            margin: 20px; 
+                            background: #f5f5f5;
+                        }
+                        img { 
+                            max-width: 100%; 
+                            height: auto; 
+                            display: block; 
+                            margin: 20px auto; 
+                            border: 1px solid #ddd;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                        }
+                        .print-controls { 
+                            margin: 20px 0;
+                            display: flex;
+                            justify-content: center;
+                            gap: 10px;
+                            flex-wrap: wrap;
+                        }
+                        .print-controls button { 
+                            padding: 10px 20px; 
+                            margin: 5px; 
+                cursor: pointer;
+                            border: 1px solid #ccc; 
+                            border-radius: 5px; 
+                            background-color: #fff;
+                            transition: all 0.3s ease;
+                        }
+                        .print-controls button:hover { 
+                            background-color: #f0f0f0;
+                            transform: translateY(-1px);
+                        }
+                        .print-controls button:active { 
+                            transform: translateY(1px);
+                        }
+                    </style>
+                </head>
+                <body>
+                    <img id="printableImage" src="${imgData}" />
+                    <div class="print-controls">
+                        <button id="printBtn">Print</button>
+                        <button id="downloadPngBtn">Download PNG</button>
+                        <button id="downloadJpegBtn">Download JPEG</button>
+                        <button id="closeBtn">Close</button>
+                    </div>
+                    <script>
+                        document.getElementById('printBtn').onclick = () => window.print();
+                        document.getElementById('closeBtn').onclick = () => window.close();
+                        
+                        document.getElementById('downloadPngBtn').onclick = () => {
+                            const a = document.createElement('a');
+                            a.href = '${imgData}';
+                            a.download = 'gage_label_${selectedGageId}.png';
+                            a.click();
+                        };
+                        
+                        document.getElementById('downloadJpegBtn').onclick = () => {
+                            const canvas = document.createElement('canvas');
+                            const img = document.getElementById('printableImage');
+                            canvas.width = img.naturalWidth;
+                            canvas.height = img.naturalHeight;
+                            const ctx = canvas.getContext('2d');
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            ctx.drawImage(img, 0, 0);
+                            const a = document.createElement('a');
+                            a.href = canvas.toDataURL('image/jpeg', 0.9);
+                            a.download = 'gage_label_${selectedGageId}.jpeg';
+                            a.click();
+                        };
+                    </script>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.focus();
+
+        } catch (error) {
+            console.error('Error generating print preview:', error);
+            showNotification(error.message || 'Failed to generate print preview.', 'error');
+        } finally {
+            // Revert changes
+            labelPreviewDiv.style.border = '1px dashed #ccc';
+            updatePreviewSize();
+        }
+    };
+
+    // Initial setup when the DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        // Populate gages on load
+        fetchAndPopulateGages();
+
+        // Set initial state based on default selection or no selection
+        setInitialState();
+
+        // Check user role for admin controls visibility
+        checkUserRole();
+
+        // Debugging button visibility
+        const printPreviewBtn = document.querySelector('.label-action-bar .action-btn');
+        const uploadLogoBtn = document.getElementById('uploadLogoBtn');
+        const saveTemplateBtn = document.querySelector('.label-action-bar .btn-primary');
+        const actionBar = document.querySelector('.label-action-bar');
+
+        console.log('--- Button Visibility Debug ---');
+        console.log('Action Bar Display Style:', actionBar ? window.getComputedStyle(actionBar).display : 'N/A');
+        console.log('Action Bar Visibility Style:', actionBar ? window.getComputedStyle(actionBar).visibility : 'N/A');
+        console.log('Action Bar offsetWidth:', actionBar ? actionBar.offsetWidth : 'N/A');
+        console.log('Action Bar offsetHeight:', actionBar ? actionBar.offsetHeight : 'N/A');
+
+        console.log('Print Preview Button offsetWidth:', printPreviewBtn ? printPreviewBtn.offsetWidth : 'N/A');
+        console.log('Print Preview Button offsetHeight:', printPreviewBtn ? printPreviewBtn.offsetHeight : 'N/A');
+        console.log('Upload Logo Button offsetWidth:', uploadLogoBtn ? uploadLogoBtn.offsetWidth : 'N/A');
+        console.log('Upload Logo Button offsetHeight:', uploadLogoBtn ? uploadLogoBtn.offsetHeight : 'N/A');
+        console.log('Save Template Button offsetWidth:', saveTemplateBtn ? saveTemplateBtn.offsetWidth : 'N/A');
+        console.log('Save Template Button offsetHeight:', saveTemplateBtn ? saveTemplateBtn.offsetHeight : 'N/A');
+        console.log('-------------------------------');
+    });
 }); 

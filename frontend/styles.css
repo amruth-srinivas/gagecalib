@@ -125,34 +125,81 @@
 }
 
 .label-preview-area {
-    flex-grow: 1;
+    flex: 1;
     display: flex;
-    flex-direction: column;
-    align-items: center;
     justify-content: center;
-    background: white;
-    border-radius: 8px;
+    align-items: center;
     padding: 20px;
+    background-color: #f5f5f5;
+    min-height: 300px;
     position: relative;
 }
 
 #labelPreview {
-    width: 100%;
-    height: 100%;
+    background-color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     display: flex;
+    flex-direction: column;
+    justify-content: space-between;
     align-items: center;
+    padding: 5%;
+    transition: all 0.3s ease;
+    position: relative;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+#labelPreview canvas {
+    max-width: 95%;
+    height: auto;
+    margin: 5px auto;
+    display: block;
+    object-fit: contain;
+}
+
+#labelPreview p {
+    margin: 2% 0;
+    text-align: center;
+    width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+}
+
+.logo-area,
+.barcode-container, .barcode-area {
+    width: 100%;
+    display: flex;
     justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 1% 0;
+    box-sizing: border-box;
+}
+
+.logo-area img {
+    max-width: 100%;
+    height: auto;
+    max-height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+#qrCodeContainer,
+#qrCodeContainer img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
 }
 
 #initialSelectionMessage {
+    color: #666;
+    font-style: italic;
+    text-align: center;
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 1.2rem;
-    color: #666;
-    text-align: center;
-    margin: 0;
 }
 
 .label-settings-panel {
@@ -207,11 +254,22 @@
     border: 1px solid #ddd;
     background: white;
     cursor: pointer;
+    font-size: 1em; /* Relative font size */
+    font-weight: bold; /* Bold text */
+    border-radius: 5px; /* Rounded corners */
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.05); /* Inner shadow for depth */
 }
 
 .font-size-btn.active {
     background: #e3f2fd;
     border-color: #2196f3;
+}
+
+#qrCodeContainer,
+#qrCodeContainer img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
 }
 
 .label-action-bar {
@@ -226,6 +284,148 @@
     justify-content: flex-end;
     gap: 10px;
     z-index: 1000;
+}
+
+/* Label Action Bar */
+.label-action-bar {
+    display: flex !important;
+    gap: 10px;
+    padding: 15px 20px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* QR Code Container */
+.barcode-container {
+    width: 100%;
+    margin: 10px 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80px; /* Minimum height to ensure visibility */
+    max-height: 200px; /* Maximum height to prevent overflow */
+}
+
+#qrCodeContainer {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#qrCodeContainer canvas {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.label-action-bar .action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+
+.label-action-bar .action-btn i {
+    font-size: 14px;
+}
+
+.label-action-bar .action-btn.btn-primary {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.label-action-bar .action-btn.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+}
+
+/* Print Preview Modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1100;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background-color: #fff;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* Close button */
+.close-modal {
+    color: #6c757d;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.close-modal:hover {
+    color: #343a40;
+}
+
+/* Modal header */
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* Modal footer */
+.modal-footer {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* Preview container */
+.preview-container {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 15px;
+    margin: 15px 0;
+    background-color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Logo preview */
+.logo-preview {
+    max-width: 150px;
+    max-height: 80px;
+    margin-bottom: 15px;
 }
 
 .label-action-bar.admin-only {

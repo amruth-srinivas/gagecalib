@@ -8,6 +8,10 @@
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="./styles.css" rel="stylesheet">
+  <!-- CDN for html2canvas and JsBarcode -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -2612,10 +2616,42 @@
 
           <!-- Bottom Action Bar -->
           <div class="label-action-bar">
-            <button class="action-btn">Print Preview</button>
-            <button class="action-btn" id="uploadLogoBtn">Upload Logo</button>
+            <button class="action-btn" id="printPreviewBtn">
+              <i class="fas fa-print"></i> Print Preview
+            </button>
+            <button class="action-btn" id="uploadLogoBtn">
+              <i class="fas fa-upload"></i> Upload Logo
+            </button>
+            <button class="action-btn btn-primary" id="saveTemplateBtn">
+              <i class="fas fa-save"></i> Save Template
+            </button>
             <input type="file" id="labelLogoInput" accept="image/*" style="display:none;" />
-            <button class="action-btn btn-primary">Save Template</button>
+          </div>
+
+          <!-- Print Preview Modal -->
+          <div id="printPreviewModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+            <div class="modal-content" style="background-color: #fefefe; margin: 10% auto; padding: 20px; border: 1px solid #888; width: 50%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3>Export Label</h3>
+                <span class="close-modal" style="cursor: pointer; font-size: 24px;">&times;</span>
+              </div>
+              <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;">
+                <button id="exportPngBtn" class="action-btn" style="background-color: #4CAF50; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer;">
+                  <i class="fas fa-file-image"></i> Export as PNG
+                </button>
+                <button id="exportJpgBtn" class="action-btn" style="background-color: #2196F3; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer;">
+                  <i class="fas fa-file-image"></i> Export as JPEG
+                </button>
+                <button id="printBtn" class="action-btn" style="background-color: #ff9800; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer;">
+                  <i class="fas fa-print"></i> Print Directly
+                </button>
+              </div>
+              <div style="text-align: center;">
+                <button id="closePreviewBtn" class="action-btn" style="background-color: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                  <i class="fas fa-times"></i> Close
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         <!-- Issue Log Page -->

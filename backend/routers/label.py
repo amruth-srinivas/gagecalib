@@ -6,6 +6,7 @@ from datetime import datetime
 
 from models import Label, LabelTemplate, User
 from schemas import LabelCreate, LabelResponse, LabelTemplateCreate, LabelTemplateUpdate, LabelTemplateResponse
+from pydantic import Field
 from database import get_async_db
 from routers.auth import get_current_user
 
@@ -76,9 +77,12 @@ async def delete_label(
     await db.commit()
     return {"detail": "Label deleted successfully"}
 
-@router.post("/label-templates", response_model=LabelTemplateResponse)
+class LabelTemplateCreateWithQR(LabelTemplateCreate):
+    qr_code_size: int = Field(default=100, ge=50, le=300, description="Size of the QR code in pixels")
+
+@router.post("/label-templates/", response_model=LabelTemplateResponse)
 async def create_label_template(
-    template: LabelTemplateCreate,
+    template: LabelTemplateCreateWithQR,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db)
 ):
@@ -93,7 +97,10 @@ async def create_label_template(
     db_template = LabelTemplate(
         gage_id=template.gage_id,
         template_name=template.template_name,
-        template_data=template.template_data,
+        template_data={
+            **template.template_data,
+            "qr_code_size": template.qr_code_size
+        },
         created_by=current_user.id
     )
     db.add(db_template)
