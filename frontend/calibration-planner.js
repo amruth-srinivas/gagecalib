@@ -281,13 +281,13 @@ function initializeCalendar() {
         }
         
         .status-scheduled {
-            background-color: #fff3cd !important;
-            border-left: 4px solid #ffc107 !important;
+            background-color: #ffc107 !important;
+            border-left: 4px solid #ff3cd !important;
             color: #856404 !important;
         }
         
         .status-overdue {
-            background-color: #f8d7da !important;
+            background-color: #dc3545  !important;
             border-left: 4px solid #dc3545 !important;
             color: #721c24 !important;
         }
